@@ -7,6 +7,7 @@ public class CanvasManager : MonoBehaviour
 {
     private TMP_InputField widthInput;
     private TMP_InputField heightInput;
+    private TMP_InputField speedInput;
 
     private WaveFunctionCollapse wfc;
 
@@ -17,21 +18,40 @@ public class CanvasManager : MonoBehaviour
 
         widthInput = GameObject.Find("WidthInput").GetComponent<TMP_InputField>();
         heightInput = GameObject.Find("HeightInput").GetComponent<TMP_InputField>();
+        speedInput = GameObject.Find("SpeedInput").GetComponent<TMP_InputField>();
     }
 
     public void RunWaveFunctionCollapse()
     {
-        if(widthInput.text == "" && heightInput.text == "") wfc.Run(10,10);
-        else
+        int width = 10;
+        int height = 10;
+        float speed = 0.2f;
+
+        try
         {
-            try
-            {
-                wfc.Run(int.Parse(widthInput.text), int.Parse(heightInput.text));
-            }
-            catch (System.Exception e)
-            {
-                Debug.Log(e);
-            }
+            width = int.Parse(widthInput.text);
+        }
+        catch { }
+
+        try
+        {
+            height = int.Parse(heightInput.text);
+        }
+        catch { }
+
+        try
+        {
+            speed = float.Parse(speedInput.text);
+        }
+        catch { }
+
+        try
+        {
+            wfc.Run(width, height, speed);
+        }
+        catch (System.Exception e)
+        {
+            Debug.Log(e);
         }
     }
 

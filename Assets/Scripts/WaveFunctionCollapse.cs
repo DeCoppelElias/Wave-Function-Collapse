@@ -6,19 +6,25 @@ using UnityEngine.Tilemaps;
 
 public class WaveFunctionCollapse : MonoBehaviour
 {
-    private enum State { Idle, Running}
+    private enum State { Idle, Collapsing, Backtracking}
     private State state = State.Idle;
+
+    private Dictionary<string, string[]> markers = new Dictionary<string, string[]>();
 
     private Cell[,] grid = new Cell[10, 10];
     private Dictionary<int, TileWrapper> tiles = new Dictionary<int, TileWrapper>();
+
+    private List<Cell> collapsedCells = new List<Cell>();
 
     [SerializeField]
     private Tilemap tilemap;
     [SerializeField]
     private Tile empty;
+    [SerializeField]
+    private Tile error;
 
-    private float collapseCooldown = 0f;
-    private float lastCollapse = 1;
+    private float actionCooldown = 0f;
+    private float lastAction = 1;
 
     private enum Side { TOP, RIGHT, BOTTOM, LEFT}
 
@@ -89,6 +95,8 @@ public class WaveFunctionCollapse : MonoBehaviour
         public int row;
         public int column;
 
+        public List<int> wrongPicks = new List<int>();
+
         //[TOP, RIGHT, BOTTOM, LEFT] no rotation
         // Each side will have 3 points that connect to other points
         public string[,] rules = new string[4,3];
@@ -118,16 +126,230 @@ public class WaveFunctionCollapse : MonoBehaviour
             }
         }
 
-        public void Collapse()
+        public string Collapse()
         {
-            this.collapsed = true;
-            if (options.Count == 0) throw new System.Exception("No fitting option was found");
+            if (collapsed) return "ERROR";
+            if (options.Count == 0)
+            {
+                Vector3Int position = new Vector3Int(column, wfc.grid.GetLength(0) - row, 0);
+                wfc.DisplayError(position);
+                return "BACKTRACK";
+            }
+            else
+            {
+                int r = Random.Range(0, options.Count);
 
-            int r = Random.Range(0, options.Count);
+                this.pick = options[r];
+                this.rotation = CalculateValidRotation(this.pick);
+                this.collapsed = true;
+                wfc.AddToCollapsedCells(this);
 
-            this.pick = options[r];
+                UpdateNeighborCells();
 
-            this.rotation = CalculateValidRotation(this.pick);
+                return "STEP";
+            }
+        }
+        public string ReCollapse()
+        {
+            DebugOptions();
+
+            Debug.Log("Last pick: "+ this.pick);
+
+            int lastPick = this.pick;
+
+            UnCollapse();
+
+            wrongPicks.Add(lastPick);
+
+            foreach(int wrongPick in wrongPicks)
+            {
+                this.options.Remove(wrongPick);
+            }
+
+            string status = Collapse();
+
+            Debug.Log("New pick: " + this.pick);
+
+            return status;
+        }
+
+        public void Reset()
+        {
+            this.wrongPicks = new List<int>();
+            UnCollapse();
+        }
+
+        private string UnCollapse()
+        {
+            if (!collapsed) return "ERROR";
+
+            this.pick = -1;
+            this.collapsed = false;
+            this.rotation = Quaternion.identity;
+            ResetOptions();
+            UpdateOptions();
+
+            wfc.RemoveFromCollapsedCells(this);
+
+            // TOP
+            int newRow = this.row - 1;
+            int newColumn = this.column;
+            if (newRow >= 0 && newRow < wfc.grid.GetLength(0)
+                && newColumn >= 0 && newColumn < wfc.grid.GetLength(1))
+            {
+                Cell neighborCell = wfc.grid[newRow, newColumn];
+                if (!neighborCell.collapsed)
+                {
+                    neighborCell.RemoveRule(Side.BOTTOM);
+
+                    //DebugCell(neighborCell);
+                }
+            }
+
+            // RIGHT
+            newRow = this.row;
+            newColumn = this.column + 1;
+            if (newRow >= 0 && newRow < wfc.grid.GetLength(0)
+                && newColumn >= 0 && newColumn < wfc.grid.GetLength(1))
+            {
+                Cell neighborCell = wfc.grid[newRow, newColumn];
+                if (!neighborCell.collapsed)
+                {
+                    neighborCell.RemoveRule(Side.LEFT);
+
+                    //DebugCell(neighborCell);
+                }
+            }
+
+            // BOTTOM
+            newRow = this.row + 1;
+            newColumn = this.column;
+            if (newRow >= 0 && newRow < wfc.grid.GetLength(0)
+                && newColumn >= 0 && newColumn < wfc.grid.GetLength(1))
+            {
+                Cell neighborCell = wfc.grid[newRow, newColumn];
+                if (!neighborCell.collapsed)
+                {
+                    neighborCell.RemoveRule(Side.TOP);
+
+                    //DebugCell(neighborCell);
+                }
+            }
+
+            // LEFT
+            newRow = this.row;
+            newColumn = this.column - 1;
+            if (newRow >= 0 && newRow < wfc.grid.GetLength(0)
+                && newColumn >= 0 && newColumn < wfc.grid.GetLength(1))
+            {
+                Cell neighborCell = wfc.grid[newRow, newColumn];
+                if (!neighborCell.collapsed)
+                {
+                    neighborCell.RemoveRule(Side.RIGHT);
+
+                    //DebugCell(neighborCell);
+                }
+            }
+
+            return "STEP";
+        }
+
+        private void UpdateNeighborCells()
+        {
+            if (!collapsed) return;
+
+            TileWrapper tileWrapper = wfc.tiles[this.pick];
+
+            string[,] rotatedSides = tileWrapper.GetSides(this.rotation);
+
+            // TOP
+            int newRow = this.row - 1;
+            int newColumn = this.column;
+            if (newRow >= 0 && newRow < wfc.grid.GetLength(0)
+                && newColumn >= 0 && newColumn < wfc.grid.GetLength(1))
+            {
+                Cell neighborCell = wfc.grid[newRow, newColumn];
+                if (!neighborCell.collapsed)
+                {
+                    string[] rule = new string[3];
+                    for (int i = 0; i < rule.Length; i++)
+                    {
+                        rule[i] = rotatedSides[0, i];
+                    }
+
+                    neighborCell.AddRule(Side.BOTTOM, rule);
+
+                    //DebugCell(neighborCell);
+                }
+            }
+
+            // RIGHT
+            newRow = this.row;
+            newColumn = this.column + 1;
+            if (newRow >= 0 && newRow < wfc.grid.GetLength(0)
+                && newColumn >= 0 && newColumn < wfc.grid.GetLength(1))
+            {
+                Cell neighborCell = wfc.grid[newRow, newColumn];
+
+                if (!neighborCell.collapsed)
+                {
+                    string[] rule = new string[3];
+                    for (int i = 0; i < rule.Length; i++)
+                    {
+                        rule[i] = rotatedSides[1, i];
+                    }
+
+                    neighborCell.AddRule(Side.LEFT, rule);
+
+                    //DebugCell(neighborCell);
+                }
+            }
+
+            // BOTTOM
+            newRow = this.row + 1;
+            newColumn = this.column;
+            if (newRow >= 0 && newRow < wfc.grid.GetLength(0)
+                && newColumn >= 0 && newColumn < wfc.grid.GetLength(1))
+            {
+                Cell neighborCell = wfc.grid[newRow, newColumn];
+
+                if (!neighborCell.collapsed)
+                {
+                    string[] rule = new string[3];
+                    for (int i = 0; i < rule.Length; i++)
+                    {
+                        rule[i] = rotatedSides[2, i];
+                    }
+
+                    neighborCell.AddRule(Side.TOP, rule);
+
+                    //DebugCell(neighborCell);
+                }
+            }
+
+            // LEFT
+            newRow = this.row;
+            newColumn = this.column - 1;
+            if (newRow >= 0 && newRow < wfc.grid.GetLength(0)
+                && newColumn >= 0 && newColumn < wfc.grid.GetLength(1))
+            {
+                Cell neighborCell = wfc.grid[newRow, newColumn];
+
+                if (!neighborCell.collapsed)
+                {
+                    string[] rule = new string[3];
+                    for (int i = 0; i < rule.Length; i++)
+                    {
+                        rule[i] = rotatedSides[3, i];
+                    }
+
+                    neighborCell.AddRule(Side.RIGHT, rule);
+
+                    //DebugCell(neighborCell);
+                }
+            }
+
+            //Debug.Log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
         }
 
         private Quaternion CalculateValidRotation(int pick)
@@ -146,7 +368,7 @@ public class WaveFunctionCollapse : MonoBehaviour
             return this.pick;
         }
 
-        private void AddRule(Side side, string[] rule)
+        public void AddRule(Side side, string[] rule)
         {
             if (rule.Length != 3) return;
             if (side == Side.TOP)
@@ -177,12 +399,57 @@ public class WaveFunctionCollapse : MonoBehaviour
                     rules[3, i] = rule[i];
                 }
             }
+
+            UpdateOptions();
         }
 
-        public void UpdateOptions(Side side, string[] rule)
+        public void RemoveRule(Side side)
         {
-            AddRule(side, rule);
+            if (side == Side.TOP)
+            {
+                for (int i = 0; i < rules.GetLength(1); i++)
+                {
+                    rules[0, i] = "";
+                }
+            }
+            if (side == Side.RIGHT)
+            {
+                for (int i = 0; i < rules.GetLength(1); i++)
+                {
+                    rules[1, i] = "";
+                }
+            }
+            if (side == Side.BOTTOM)
+            {
+                for (int i = 0; i < rules.GetLength(1); i++)
+                {
+                    rules[2, i] = "";
+                }
+            }
+            if (side == Side.LEFT)
+            {
+                for (int i = 0; i < rules.GetLength(1); i++)
+                {
+                    rules[3, i] = "";
+                }
+            }
 
+            ResetOptions();
+
+            UpdateOptions();
+        }
+
+        private void ResetOptions()
+        {
+            this.options = new List<int>();
+            for (int i = 0; i < wfc.tiles.Count; i++)
+            {
+                this.options.Add(i);
+            }
+        }
+
+        private void UpdateOptions()
+        {
             List<int> newOptions = new List<int>();
 
             foreach(int option in this.options)
@@ -216,11 +483,11 @@ public class WaveFunctionCollapse : MonoBehaviour
                     if (currentRule.Contains("-"))
                     {
                         string s = currentRule.Remove(0, 1);
-                        if (marker == s) valid = false;
+                        if (wfc.markers[marker].Contains(s)) valid = false;
                     }
                     else
                     {
-                        if (currentRule != "" && marker != currentRule) valid = false;
+                        if (currentRule != "" && !wfc.markers[marker].Contains(currentRule)) valid = false;
                     }
                 }
             }
@@ -242,20 +509,30 @@ public class WaveFunctionCollapse : MonoBehaviour
             return shiftStrings;
         }
 
-        private int ContainsTile(string name)
+        private void DebugOptions()
         {
+            string optionsString = "";
             foreach(int option in this.options)
             {
-                if (wfc.tiles[option].tile.name == name) return option;
+                optionsString += option + "/";
             }
-
-            return -1;
+            Debug.Log(optionsString);
         }
     }
 
     private TileWrapper getTileWrapper(int i)
     {
         return tiles[i];
+    }
+
+    private void AddToCollapsedCells(Cell cell)
+    {
+        this.collapsedCells.Insert(0,cell);
+    }
+
+    private void RemoveFromCollapsedCells(Cell cell)
+    {
+        this.collapsedCells.Remove(cell);
     }
 
     private Cell NextCell()
@@ -290,117 +567,18 @@ public class WaveFunctionCollapse : MonoBehaviour
         return cells[r];
     }
 
-    private void CollapseNextCell()
+    private string CollapseNextCell()
     {
         Cell nextCell = NextCell();
 
         if (nextCell == null)
         {
-            state = State.Idle;
-            return;
+            return "FINISHED";
         }
 
-        nextCell.Collapse();
+        string status = nextCell.Collapse();
 
-        UpdateNeighborCells(nextCell);
-
-        DisplayGrid();
-    }
-
-    private void UpdateNeighborCells(Cell cell)
-    {
-        TileWrapper tileWrapper = tiles[cell.pick];
-
-        string[,] rotatedSides = tileWrapper.GetSides(cell.rotation);
-
-        // TOP
-        int newRow = cell.row - 1;
-        int newColumn = cell.column;
-        if(newRow >= 0 && newRow < grid.GetLength(0)
-            && newColumn >= 0 && newColumn < grid.GetLength(1))
-        {
-            Cell neighborCell = grid[newRow, newColumn];
-            if (!neighborCell.collapsed)
-            {
-                string[] rule = new string[3];
-                for(int i = 0; i < rule.Length; i++)
-                {
-                    rule[i] = rotatedSides[0, i];
-                }
-
-                neighborCell.UpdateOptions(Side.BOTTOM, rule);
-
-                //DebugCell(neighborCell);
-            }
-        }
-
-        // RIGHT
-        newRow = cell.row;
-        newColumn = cell.column + 1;
-        if (newRow >= 0 && newRow < grid.GetLength(0)
-            && newColumn >= 0 && newColumn < grid.GetLength(1))
-        {
-            Cell neighborCell = grid[newRow, newColumn];
-
-            if (!neighborCell.collapsed)
-            {
-                string[] rule = new string[3];
-                for (int i = 0; i < rule.Length; i++)
-                {
-                    rule[i] = rotatedSides[1, i];
-                }
-
-                neighborCell.UpdateOptions(Side.LEFT, rule);
-
-                //DebugCell(neighborCell);
-            }
-        }
-
-        // BOTTOM
-        newRow = cell.row + 1;
-        newColumn = cell.column;
-        if (newRow >= 0 && newRow < grid.GetLength(0)
-            && newColumn >= 0 && newColumn < grid.GetLength(1))
-        {
-            Cell neighborCell = grid[newRow, newColumn];
-
-            if (!neighborCell.collapsed)
-            {
-                string[] rule = new string[3];
-                for (int i = 0; i < rule.Length; i++)
-                {
-                    rule[i] = rotatedSides[2, i];
-                }
-
-                neighborCell.UpdateOptions(Side.TOP, rule);
-
-                //DebugCell(neighborCell);
-            }
-        }
-
-        // LEFT
-        newRow = cell.row;
-        newColumn = cell.column - 1;
-        if (newRow >= 0 && newRow < grid.GetLength(0)
-            && newColumn >= 0 && newColumn < grid.GetLength(1))
-        {
-            Cell neighborCell = grid[newRow, newColumn];
-
-            if (!neighborCell.collapsed)
-            {
-                string[] rule = new string[3];
-                for (int i = 0; i < rule.Length; i++)
-                {
-                    rule[i] = rotatedSides[3, i];
-                }
-
-                neighborCell.UpdateOptions(Side.RIGHT, rule);
-
-                //DebugCell(neighborCell);
-            }
-        }
-
-        //Debug.Log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+        return status;
     }
 
     private void DebugCell(Cell cell)
@@ -448,6 +626,11 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
     }
 
+    private void DisplayError(Vector3Int position)
+    {
+        this.tilemap.SetTile(position, error);
+    }
+
     private void InitializeTiles()
     {
         this.tiles = new Dictionary<int, TileWrapper>();
@@ -485,34 +668,34 @@ public class WaveFunctionCollapse : MonoBehaviour
             else if (tile.name == "rivertile2")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Water","Water" },
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "WaterGrass","Water","Water" },
                     { "Water","Water","Water" },
-                    { "Water","Water","Grass" } });
+                    { "Water","Water","WaterGrass" } });
             }
             else if (tile.name == "rivertile3")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Water","Water" },
-                    { "Water","Water","Grass" },
-                    { "Grass","Water","Water" },
-                    { "Water","Water","Grass" } });
+                    { "WaterGrass","Water","Water" },
+                    { "Water","Water","WaterGrass" },
+                    { "WaterGrass","Water","Water" },
+                    { "Water","Water","WaterGrass" } });
             }
             else if (tile.name == "rivertile4")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Water","Grass" },
-                    { "Grass","Grass","Grass" } });
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" } });
             }
             else if (tile.name == "rivertile5")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Water","Water" },
-                    { "Water","Water","Grass" },
-                    { "Grass","Grass","Grass" } });
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "WaterGrass","Water","Water" },
+                    { "Water","Water","WaterGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" } });
             }
             else if (tile.name == "rivertile6")
             {
@@ -525,86 +708,86 @@ public class WaveFunctionCollapse : MonoBehaviour
             else if (tile.name == "rivertile7")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Water","Grass" },
-                    { "Grass","Water","Grass" },
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Grass","Grass" } });
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" } });
             }
             else if (tile.name == "rivertile8")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Water","Water" },
+                    { "WaterGrass","Water","Water" },
                     { "Water","Water","Water" },
                     { "Water","Water","Water" },
-                    { "Water","Water","Grass" } });
+                    { "Water","Water","WaterGrass" } });
             }
             else if (tile.name == "rivertile9")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Water","Water","Grass" },
-                    { "Grass","Water","Grass" },
-                    { "Grass","Water","Grass" },
-                    { "Grass","Water","Water" } });
+                    { "Water","Water","WaterGrass" },
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "WaterGrass","Water","Water" } });
             }
             else if (tile.name == "rivertile10")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Water","Grass" },
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Water","Grass" } });
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "WaterGrass","Water","WaterGrass" } });
             }
             else if (tile.name == "rivertile11")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Water","Grass" },
-                    { "Grass","Water","Grass" },
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Water","Grass" } });
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "WaterGrass","Water","WaterGrass" } });
             }
             else if (tile.name == "rivertile12")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Water","Grass" },
-                    { "Grass","Water","Grass" },
-                    { "Grass","Water","Grass" },
-                    { "Grass","Water","Grass" } });
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "WaterGrass","Water","WaterGrass" } });
             }
             else if (tile.name == "rivertile13")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Water","Grass" },
-                    { "Grass","Water","Water" },
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "WaterGrass","Water","Water" },
                     { "Water","Water","Water" },
-                    { "Water","Water","Grass" } });
+                    { "Water","Water","WaterGrass" } });
             }
             else if (tile.name == "rivertile14")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Grass","Grass" } });
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" } });
             }
             else if (tile.name == "rivertile15")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Water","Water","Grass" },
-                    { "Grass","Water","Grass" },
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Water","Water" } });
+                    { "Water","Water","WaterGrass" },
+                    { "WaterGrass","Water","WaterGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "WaterGrass","Water","Water" } });
             }
             else if (tile.name == "rivertile16")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "Grass","Water","Water" },
-                    { "Water","Water","Grass" },
-                    { "Grass","Grass","Grass" },
-                    { "Grass","Water","Grass" } });
+                    { "WaterGrass","Water","Water" },
+                    { "Water","Water","WaterGrass" },
+                    { "ShortGrass","ShortGrass","ShortGrass" },
+                    { "WaterGrass","Water","WaterGrass" } });
             }
         }
     }
-    private void InitialzeGrid()
+    private void InitializeGrid()
     {
         for (int row = 0; row < grid.GetLength(0); row++)
         {
@@ -615,31 +798,75 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
     }
 
+    private void InitializeMarkers()
+    {
+        markers = new Dictionary<string, string[]>();
+
+        markers.Add("Water", new string[] { "Water" });
+        markers.Add("ShortGrass", new string[] { "Grass" });
+        markers.Add("Grass", new string[] { "ShortGrass" , "Grass"});
+        markers.Add("WaterGrass", new string[] { "WaterGrass" });
+    }
+
     private void Initialize()
     {
         this.tilemap.ClearAllTiles();
 
         InitializeTiles();
-        InitialzeGrid();
+        InitializeGrid();
         InitializeRules();
+        InitializeMarkers();
     }
 
     private void Update()
     {
-        if(state == State.Running && Time.time - lastCollapse > collapseCooldown)
+        if (state == State.Idle) return;
+        if(Time.time - lastAction > actionCooldown)
         {
-            CollapseNextCell();
+            lastAction = Time.time;
 
-            lastCollapse = Time.time;
+            if (state == State.Collapsing)
+            {
+                string status = CollapseNextCell();
+
+                if (status == "FINISHED")
+                {
+                    state = State.Idle;
+                }
+                else if (status == "BACKTRACK")
+                {
+                    state = State.Backtracking;
+                }
+                else if (status == "ERROR")
+                {
+                    Debug.Log("error");
+                }
+            }
+
+            else if (state == State.Backtracking)
+            {
+                if(collapsedCells[0].options.Count > 1)
+                {
+                    collapsedCells[0].ReCollapse();
+                    this.state = State.Collapsing;
+                }
+                else
+                {
+                    collapsedCells[0].Reset();
+                }
+            }
+
+            DisplayGrid();
         }
     }
 
-    public void Run(int width, int height)
+    public void Run(int width, int height, float speed)
     {
         this.grid = new Cell[height, width];
+        this.actionCooldown = speed;
 
         Initialize();
 
-        this.state = State.Running;
+        this.state = State.Collapsing;
     }
 }
