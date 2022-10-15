@@ -207,6 +207,10 @@ MonoBehaviour:
   tilemap: {fileID: 1681574550}
   empty: {fileID: 11400000, guid: 5c2e50d472b4fa041aa7a51bee242693, type: 2}
   error: {fileID: 11400000, guid: 65026d4f1a066514faa6b0817befa27c, type: 2}
+  debugTextPrefab: {fileID: 2743964576794406568, guid: 51febe588534c984ebe5c293244c8200, type: 3}
+  actionCooldown: 0
+  lastAction: 1
+  stepsPerFrame: 1
 --- !u!4 &253078947
 Transform:
   m_ObjectHideFlags: 0
@@ -398,6 +402,37 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 316222778}
   m_CullTransparentMesh: 1
+--- !u!1 &338317649
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 338317650}
+  m_Layer: 0
+  m_Name: TextObjects
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &338317650
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 338317649}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 5
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &366531486
 GameObject:
   m_ObjectHideFlags: 0
