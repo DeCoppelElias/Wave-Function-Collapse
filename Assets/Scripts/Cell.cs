@@ -10,6 +10,7 @@ public class Cell
 
     public bool collapsed = false;
     public Dictionary<int,List<Quaternion>> options = new Dictionary<int, List<Quaternion>>();
+    public Dictionary<int, List<Quaternion>> optionsBeforeCollapse = new Dictionary<int, List<Quaternion>>();
 
     public int pick = -1;
     public Quaternion rotation = Quaternion.identity;
@@ -17,7 +18,7 @@ public class Cell
     public int row;
     public int column;
 
-    public List<int> wrongPicks = new List<int>();
+    public Dictionary<int, List<Quaternion>> wrongPicks = new Dictionary<int, List<Quaternion>>();
 
     // [TOP, RIGHT, BOTTOM, LEFT] no rotation
     // Each side will have 3 points that connect to other points
@@ -28,9 +29,9 @@ public class Cell
         this.wfc = wfc;
 
         this.options = new Dictionary<int, List<Quaternion>>();
-        List<Quaternion> rotations = new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList();
         for (int i = 0; i < wfc.getTileCount(); i++)
         {
+            List<Quaternion> rotations = new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList();
             this.options.Add(i, rotations);
         }
 
@@ -49,25 +50,92 @@ public class Cell
         }
     }
 
+    public int getRealOptionsCount()
+    {
+        // Make sure when recollapsing that previous options are not repicked
+        Dictionary<int, List<Quaternion>> realOptions = Clone(this.options);
+        foreach (int wrongOption in this.wrongPicks.Keys)
+        {
+            foreach (Quaternion rotation in this.wrongPicks[wrongOption])
+            {
+                if (realOptions.ContainsKey(wrongOption) && realOptions[wrongOption].Contains(rotation))
+                {
+                    realOptions[wrongOption].Remove(rotation);
+                    if (realOptions[wrongOption].Count == 0) realOptions.Remove(wrongOption);
+                }
+            }
+        }
+        return realOptions.Count;
+    }
+
+    private Dictionary<int, List<Quaternion>> Clone(Dictionary<int, List<Quaternion>> options)
+    {
+        Dictionary<int, List<Quaternion>> cloneOptions = new Dictionary<int, List<Quaternion>>();
+        foreach(KeyValuePair<int, List<Quaternion>> keyVal in options)
+        {
+            int option = keyVal.Key;
+            List<Quaternion> rotations = keyVal.Value;
+
+            List<Quaternion> cloneRotations = new List<Quaternion>();
+            foreach(Quaternion rotation in rotations)
+            {
+                cloneRotations.Add(rotation);
+            }
+
+            cloneOptions.Add(option, cloneRotations);
+        }
+
+        return cloneOptions;
+    }
+
     public string Collapse()
     {
         if (collapsed) return "ERROR";
-        if (options.Count == 0)
+
+        // Make sure when recollapsing that previous options are not repicked
+        Dictionary<int, List<Quaternion>> realOptions = Clone(this.options);
+        foreach (int wrongOption in this.wrongPicks.Keys)
+        {
+            foreach(Quaternion rotation in this.wrongPicks[wrongOption])
+            {
+                if(realOptions.ContainsKey(wrongOption) && realOptions[wrongOption].Contains(rotation))
+                {
+                    realOptions[wrongOption].Remove(rotation);
+                    if (realOptions[wrongOption].Count == 0) realOptions.Remove(wrongOption);
+                }
+            }
+        }
+
+        // If no options remain, time to backtrack
+        if (realOptions.Count == 0)
         {
             wfc.DisplayError(row,column);
             return "BACKTRACK";
         }
+
+        // Select random pick from options and update neighbours
         else
         {
-            int r = Random.Range(0, options.Count);
-            KeyValuePair<int, List<Quaternion>> keyValuePair = options.ElementAt(r);
+            int r = Random.Range(0, realOptions.Count);
+            KeyValuePair<int, List<Quaternion>> keyValuePair = realOptions.ElementAt(r);
 
             this.pick = keyValuePair.Key;
 
-            r = Random.Range(0, keyValuePair.Value.Count);
-            this.rotation = keyValuePair.Value[r];
+            try
+            {
+                r = Random.Range(0, keyValuePair.Value.Count);
+                this.rotation = keyValuePair.Value[r];
+            }
+            catch(System.Exception e)
+            {
+                Debug.Log("-------------------");
+                Debug.Log(GetLongOptionsString(this.options));
+                Debug.Log(GetLongOptionsString(realOptions));
+                Debug.Log("-------------------");
+            }
 
             this.collapsed = true;
+            optionsBeforeCollapse = Clone(this.options);
             wfc.AddToCollapsedCells(this);
 
             UpdateNeighborAfterCollapse();
@@ -77,57 +145,54 @@ public class Cell
     }
     public string ReCollapse()
     {
-        DebugOptions();
-
-        Debug.Log("Last pick: " + this.pick);
-
         int lastPick = this.pick;
+        Quaternion lastRotation = this.rotation;
 
         UnCollapse();
 
-        wrongPicks.Add(lastPick);
-
-        foreach (int wrongPick in wrongPicks)
+        if (!wrongPicks.ContainsKey(lastPick)) wrongPicks.Add(lastPick, new Quaternion[] { lastRotation }.ToList());
+        else
         {
-            this.options.Remove(wrongPick);
+            if (!wrongPicks[lastPick].Contains(lastRotation)) wrongPicks[lastPick].Add(lastRotation);
         }
 
         string status = Collapse();
 
-        Debug.Log("New pick: " + this.pick);
-
         return status;
     }
-
     public void Reset()
     {
-        this.wrongPicks = new List<int>();
+        this.wrongPicks = new Dictionary<int, List<Quaternion>>();
         UnCollapse();
     }
-
-    private string UnCollapse()
+    public string UnCollapse()
     {
         if (!collapsed) return "ERROR";
 
         this.pick = -1;
         this.collapsed = false;
         this.rotation = Quaternion.identity;
-        ResetOptions();
-        UpdateOptions();
+
+        this.options = new Dictionary<int, List<Quaternion>>(this.optionsBeforeCollapse);
+        this.optionsBeforeCollapse = new Dictionary<int, List<Quaternion>>();
 
         wfc.RemoveFromCollapsedCells(this);
 
+        UpdateNeighborsAfterUnCollapse();
+
+        return "STEP";
+    }
+    private void UpdateNeighborsAfterUnCollapse()
+    {
         // TOP
         int newRow = this.row - 1;
         int newColumn = this.column;
-        if (wfc.InsideBounds(newRow,newColumn))
+        if (wfc.InsideBounds(newRow, newColumn))
         {
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                neighborCell.RemoveRule(Side.BOTTOM);
-
-                //DebugCell(neighborCell);
+                neighborCell.RemoveRule(Side.BOTTOM, this.options);
             }
         }
 
@@ -139,9 +204,7 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                neighborCell.RemoveRule(Side.LEFT);
-
-                //DebugCell(neighborCell);
+                neighborCell.RemoveRule(Side.LEFT, this.options);
             }
         }
 
@@ -153,9 +216,7 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                neighborCell.RemoveRule(Side.TOP);
-
-                //DebugCell(neighborCell);
+                neighborCell.RemoveRule(Side.TOP, this.options);
             }
         }
 
@@ -167,15 +228,10 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                neighborCell.RemoveRule(Side.RIGHT);
-
-                //DebugCell(neighborCell);
+                neighborCell.RemoveRule(Side.RIGHT, this.options);
             }
         }
-
-        return "STEP";
     }
-
     private void UpdateNeighborAfterCollapse()
     {
         if (!collapsed) return;
@@ -266,7 +322,6 @@ public class Cell
 
         //Debug.Log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
     }
-
     private void UpdateNeighborAfterOptionReduce()
     {
         if (collapsed) return;
@@ -279,7 +334,10 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                neighborCell.UpdateOptions(Side.BOTTOM, this.options);
+                int previousNeighborOptionsCount = neighborCell.options.Count;
+                neighborCell.UpdateOptionsNeighborOptions(Side.BOTTOM, this.options);
+                int currentNeighborOptionsCount = neighborCell.options.Count;
+                if (previousNeighborOptionsCount > currentNeighborOptionsCount && currentNeighborOptionsCount != 0) neighborCell.UpdateNeighborAfterOptionReduce();
             }
         }
 
@@ -291,7 +349,10 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                neighborCell.UpdateOptions(Side.LEFT, this.options);
+                int previousNeighborOptionsCount = neighborCell.options.Count;
+                neighborCell.UpdateOptionsNeighborOptions(Side.LEFT, this.options);
+                int currentNeighborOptionsCount = neighborCell.options.Count;
+                if (previousNeighborOptionsCount > currentNeighborOptionsCount && currentNeighborOptionsCount != 0) neighborCell.UpdateNeighborAfterOptionReduce();
             }
         }
 
@@ -303,7 +364,10 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                neighborCell.UpdateOptions(Side.TOP, this.options);
+                int previousNeighborOptionsCount = neighborCell.options.Count;
+                neighborCell.UpdateOptionsNeighborOptions(Side.TOP, this.options);
+                int currentNeighborOptionsCount = neighborCell.options.Count;
+                if (previousNeighborOptionsCount > currentNeighborOptionsCount && currentNeighborOptionsCount != 0) neighborCell.UpdateNeighborAfterOptionReduce();
             }
         }
 
@@ -315,7 +379,84 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                neighborCell.UpdateOptions(Side.RIGHT, this.options);
+                int previousNeighborOptionsCount = neighborCell.options.Count;
+                neighborCell.UpdateOptionsNeighborOptions(Side.RIGHT, this.options);
+                int currentNeighborOptionsCount = neighborCell.options.Count;
+                if (previousNeighborOptionsCount > currentNeighborOptionsCount && currentNeighborOptionsCount != 0) neighborCell.UpdateNeighborAfterOptionReduce();
+            }
+        }
+
+        //Debug.Log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+    }
+    private void UpdateNeighborAfterOptionIncrease()
+    {
+        if (collapsed) return;
+
+        // TOP
+        int newRow = this.row - 1;
+        int newColumn = this.column;
+        if (wfc.InsideBounds(newRow, newColumn))
+        {
+            Cell neighborCell = wfc.GetCell(newRow, newColumn);
+            if (!neighborCell.collapsed)
+            {
+                int previousOptionsCount = neighborCell.options.Count;
+                neighborCell.ResetOptions();
+                neighborCell.UpdateOptionsDirectNeighbors();
+                neighborCell.UpdateOptionsNeighborOptions(Side.BOTTOM, this.options);
+                int currentOptionsCount = neighborCell.options.Count;
+                if (previousOptionsCount < currentOptionsCount) neighborCell.UpdateNeighborAfterOptionIncrease();
+            }
+        }
+
+        // RIGHT
+        newRow = this.row;
+        newColumn = this.column + 1;
+        if (wfc.InsideBounds(newRow, newColumn))
+        {
+            Cell neighborCell = wfc.GetCell(newRow, newColumn);
+            if (!neighborCell.collapsed)
+            {
+                int previousOptionsCount = neighborCell.options.Count;
+                neighborCell.ResetOptions();
+                neighborCell.UpdateOptionsDirectNeighbors();
+                neighborCell.UpdateOptionsNeighborOptions(Side.LEFT, this.options);
+                int currentOptionsCount = neighborCell.options.Count;
+                if (previousOptionsCount < currentOptionsCount) neighborCell.UpdateNeighborAfterOptionIncrease();
+            }
+        }
+
+        // BOTTOM
+        newRow = this.row + 1;
+        newColumn = this.column;
+        if (wfc.InsideBounds(newRow, newColumn))
+        {
+            Cell neighborCell = wfc.GetCell(newRow, newColumn);
+            if (!neighborCell.collapsed)
+            {
+                int previousOptionsCount = neighborCell.options.Count;
+                neighborCell.ResetOptions();
+                neighborCell.UpdateOptionsDirectNeighbors();
+                neighborCell.UpdateOptionsNeighborOptions(Side.TOP, this.options);
+                int currentOptionsCount = neighborCell.options.Count;
+                if (previousOptionsCount < currentOptionsCount) neighborCell.UpdateNeighborAfterOptionIncrease();
+            }
+        }
+
+        // LEFT
+        newRow = this.row;
+        newColumn = this.column - 1;
+        if (wfc.InsideBounds(newRow, newColumn))
+        {
+            Cell neighborCell = wfc.GetCell(newRow, newColumn);
+            if (!neighborCell.collapsed)
+            {
+                int previousOptionsCount = neighborCell.options.Count;
+                neighborCell.ResetOptions();
+                neighborCell.UpdateOptionsDirectNeighbors();
+                neighborCell.UpdateOptionsNeighborOptions(Side.RIGHT, this.options);
+                int currentOptionsCount = neighborCell.options.Count;
+                if (previousOptionsCount < currentOptionsCount) neighborCell.UpdateNeighborAfterOptionIncrease();
             }
         }
 
@@ -360,11 +501,13 @@ public class Cell
                 rules[3, i] = rule[i];
             }
         }
-
-        UpdateOptions();
+        int previousOptionsCount = this.options.Count;
+        UpdateOptionsDirectNeighbors();
+        int currentOptionsCount = this.options.Count;
+        if (previousOptionsCount != currentOptionsCount && currentOptionsCount != 0) UpdateNeighborAfterOptionReduce();
     }
 
-    public void RemoveRule(Side side)
+    public void RemoveRule(Side side, Dictionary<int, List<Quaternion>> neighborOptions)
     {
         if (side == Side.TOP)
         {
@@ -395,9 +538,12 @@ public class Cell
             }
         }
 
+        int previousOptionsCount = this.options.Count;
         ResetOptions();
-
-        UpdateOptions();
+        UpdateOptionsDirectNeighbors();
+        UpdateOptionsNeighborOptions(side, neighborOptions);
+        int currentOptionsCount = this.options.Count;
+        if (previousOptionsCount < currentOptionsCount) UpdateNeighborAfterOptionIncrease();
     }
 
     private void ResetOptions()
@@ -409,8 +555,7 @@ public class Cell
             this.options.Add(i, rotations);
         }
     }
-
-    private void UpdateOptions()
+    private void UpdateOptionsDirectNeighbors()
     {
         Dictionary<int, List<Quaternion>> newOptions = new Dictionary<int, List<Quaternion>>();
 
@@ -445,12 +590,9 @@ public class Cell
             if (validRotations.Count > 0) newOptions.Add(option, validRotations);
         }
 
-        int previousOptionsCount = this.options.Count;
         this.options = newOptions;
-        if (this.options.Count != previousOptionsCount) UpdateNeighborAfterOptionReduce();
-
     }
-    private void UpdateOptions(Side side, Dictionary<int, List<Quaternion>> neighborOptions)
+    private void UpdateOptionsNeighborOptions(Side side, Dictionary<int, List<Quaternion>> neighborOptions)
     {
         Dictionary<int, List<Quaternion>> newOptions = new Dictionary<int, List<Quaternion>>();
 
@@ -459,40 +601,21 @@ public class Cell
             TileWrapper neighborTileWrapper = wfc.getTileWrapper(neighborOption);
             foreach (Quaternion neighborRotation in neighborOptions[neighborOption])
             {
-                string[] neighborSideMarkers = neighborTileWrapper.GetSide(side, rotation);
+                string[] neighborSideMarkers = neighborTileWrapper.GetSide(wfc.ReverseSide(side), neighborRotation);
 
                 foreach (int option in this.options.Keys)
                 {
                     List<Quaternion> validRotations = new List<Quaternion>();
-
                     TileWrapper tileWrapper = wfc.getTileWrapper(option);
 
-                    Quaternion rotation = Quaternion.identity;
-                    string[] sideMarkers = tileWrapper.GetSide(side, rotation);
-                    if (CheckRule(sideMarkers, neighborSideMarkers))
+                    List<Quaternion> rotations = this.options[option];
+                    foreach(Quaternion rotation in rotations)
                     {
-                        validRotations.Add(rotation);
-                    }
-
-                    rotation = Quaternion.Euler(0,0,90);
-                    sideMarkers = tileWrapper.GetSide(side, rotation);
-                    if (CheckRule(sideMarkers, neighborSideMarkers))
-                    {
-                        validRotations.Add(rotation);
-                    }
-
-                    rotation = Quaternion.Euler(0, 0, 180);
-                    sideMarkers = tileWrapper.GetSide(side, rotation);
-                    if (CheckRule(sideMarkers, neighborSideMarkers))
-                    {
-                        validRotations.Add(rotation);
-                    }
-
-                    rotation = Quaternion.Euler(0, 0, 270);
-                    sideMarkers = tileWrapper.GetSide(side, rotation);
-                    if (CheckRule(sideMarkers, neighborSideMarkers))
-                    {
-                        validRotations.Add(rotation);
+                        string[] sideMarkers = tileWrapper.GetSide(side, rotation);
+                        if (CheckRule(sideMarkers, neighborSideMarkers))
+                        {
+                            validRotations.Add(rotation);
+                        }
                     }
 
                     if (validRotations.Count > 0)
@@ -509,10 +632,7 @@ public class Cell
                 }
             }
         }
-        
-        int previousOptionsCount = this.options.Count;
         this.options = newOptions;
-        if (this.options.Count != previousOptionsCount) UpdateNeighborAfterOptionReduce();
     }
 
     private bool CheckRules(int option, Quaternion rotation)
@@ -590,6 +710,50 @@ public class Cell
         {
             optionsString += option + "/";
         }
+        return optionsString;
+    }
+
+    public string GetLongOptionsString(Dictionary<int, List<Quaternion>> options)
+    {
+        string optionsString = "";
+        foreach (int option in options.Keys)
+        {
+            string rotationsString = "";
+            foreach(Quaternion rotation in this.options[option])
+            {
+                rotationsString += rotation.eulerAngles.z + ".";
+            }
+
+            optionsString += option + ":" + rotationsString + "/";
+        }
+        return optionsString;
+    }
+
+    public string GetDisplayOptionsString()
+    {
+        string optionsString = "All Possible Options: \n";
+        foreach (int option in options.Keys)
+        {
+            TileWrapper tileWrapper = wfc.getTileWrapper(option);
+            optionsString += tileWrapper.tile.name + ":\n";
+
+            string rotationsString = "Rotations: ";
+            for (int i = 0; i < this.options[option].Count; i++)
+            {
+                Quaternion rotation = this.options[option][i];
+
+                if (i == 0) rotationsString += "{ ";
+                rotationsString += rotation.eulerAngles.z;
+                if (i == this.options[option].Count - 1) rotationsString += " }";
+                else
+                {
+                    rotationsString += "/";
+                }
+            }
+
+            optionsString += rotationsString + "\n";
+        }
+
         return optionsString;
     }
 }

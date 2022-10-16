@@ -9,6 +9,8 @@ public class CanvasManager : MonoBehaviour
     private TMP_InputField heightInput;
     private TMP_InputField speedInput;
 
+    private TMP_Text cellOptionsOuput;
+
     private WaveFunctionCollapse wfc;
 
     // Start is called before the first frame update
@@ -19,6 +21,29 @@ public class CanvasManager : MonoBehaviour
         widthInput = GameObject.Find("WidthInput").GetComponent<TMP_InputField>();
         heightInput = GameObject.Find("HeightInput").GetComponent<TMP_InputField>();
         speedInput = GameObject.Find("SpeedInput").GetComponent<TMP_InputField>();
+
+        cellOptionsOuput = GameObject.Find("OptionsOutput").GetComponent<TMP_Text>();
+    }
+
+    private void Update()
+    {
+        if (Input.GetMouseButtonDown(0))
+        {
+            Vector3 mousePos = Input.mousePosition;
+            Vector3 worldpos = Camera.main.ScreenToWorldPoint(mousePos);
+            worldpos.z = 0;
+
+            if (wfc.InsideBounds(worldpos))
+            {
+                Cell cell = wfc.GetCell(worldpos);
+                string optionsString = cell.GetDisplayOptionsString();
+                cellOptionsOuput.text = optionsString;
+            }
+            else
+            {
+                cellOptionsOuput.text = "";
+            }
+        }
     }
 
     public void RunWaveFunctionCollapse()
@@ -58,5 +83,15 @@ public class CanvasManager : MonoBehaviour
     public void Exit()
     {
         Application.Quit();
+    }
+
+    public void Pause()
+    {
+        wfc.Pause();
+    }
+
+    public void Continue()
+    {
+        wfc.Continue();
     }
 }

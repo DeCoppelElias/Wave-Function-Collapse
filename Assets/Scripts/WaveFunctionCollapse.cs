@@ -15,7 +15,7 @@ public class WaveFunctionCollapse : MonoBehaviour
 
     private Dictionary<string, string[]> markers = new Dictionary<string, string[]>();
 
-    private Cell[,] grid = new Cell[10, 10];
+    private Cell[,] grid = new Cell[0, 0];
     private Dictionary<int, TileWrapper> tiles = new Dictionary<int, TileWrapper>();
 
     private TextMeshPro[,] textMeshGrid;
@@ -43,6 +43,14 @@ public class WaveFunctionCollapse : MonoBehaviour
         return tiles[i];
     }
 
+    public Side ReverseSide(Side s)
+    {
+        if (s == Side.TOP) return Side.BOTTOM;
+        else if (s == Side.RIGHT) return Side.LEFT;
+        else if (s == Side.BOTTOM) return Side.TOP;
+        else return Side.RIGHT;
+    }
+
     public Cell GetCell(int row, int column)
     {
         if (row < 0 || row >= this.grid.GetLength(0)) throw new System.Exception("Row out of bounds");
@@ -50,10 +58,24 @@ public class WaveFunctionCollapse : MonoBehaviour
         return this.grid[row,column];
     }
 
+    public Cell GetCell(Vector3 position)
+    {
+        Vector3Int roundedPosition = Vector3Int.FloorToInt(position);
+        if (!InsideBounds(roundedPosition)) return null;
+        return this.grid[this.grid.GetLength(0) - 1 - roundedPosition.y, roundedPosition.x];
+    }
+
     public bool InsideBounds(int row, int column)
     {
         if (row < 0 || row >= this.grid.GetLength(0)) return false;
         if (column < 0 || column >= this.grid.GetLength(1)) return false;
+        return true;
+    }
+
+    public bool InsideBounds(Vector3 position)
+    {
+        if (position.x < 0 || position.x >= this.grid.GetLength(1)) return false;
+        if (position.y < 0 || position.y >= this.grid.GetLength(0)) return false;
         return true;
     }
 
@@ -147,7 +169,7 @@ public class WaveFunctionCollapse : MonoBehaviour
             {
                 Cell currentCell = grid[row, column];
 
-                DisplayCell(currentCell, new Vector3Int(column, grid.GetLength(0) - row, 0));
+                DisplayCell(currentCell, new Vector3Int(column, grid.GetLength(0) - 1 - row, 0));
             }
         }
     }
@@ -174,7 +196,7 @@ public class WaveFunctionCollapse : MonoBehaviour
 
     public void DisplayError(int row, int column)
     {
-        Vector3Int position = new Vector3Int(column, this.grid.GetLength(0) - row);
+        Vector3Int position = new Vector3Int(column, this.grid.GetLength(0) - 1 - row);
         this.tilemap.SetTile(position, error);
     }
 
@@ -336,17 +358,6 @@ public class WaveFunctionCollapse : MonoBehaviour
             }
         }
     }
-    private void InitializeGrid()
-    {
-        for (int row = 0; row < grid.GetLength(0); row++)
-        {
-            for (int column = 0; column < grid.GetLength(1); column++)
-            {
-                grid[row, column] = new Cell(this, row, column);
-            }
-        }
-    }
-
     private void InitializeMarkers()
     {
         markers = new Dictionary<string, string[]>();
@@ -356,33 +367,58 @@ public class WaveFunctionCollapse : MonoBehaviour
         markers.Add("Grass", new string[] { "ShortGrass" , "Grass"});
         markers.Add("WaterGrass", new string[] { "WaterGrass" });
     }
-
-    private void InitializeDebugUi()
-    {
-        textMeshGrid = new TextMeshPro[this.grid.GetLength(0), this.grid.GetLength(1)];
-
-        GameObject parent = GameObject.Find("TextObjects");
-        for(int row = 0; row < this.grid.GetLength(0); row++)
-        {
-            for (int column = 0; column < this.grid.GetLength(1); column++)
-            {
-                GameObject textGameObject = Instantiate(debugTextPrefab, new Vector3(column + 0.5f, this.grid.GetLength(0) - row + 0.5f, 0), Quaternion.identity, parent.transform);
-                TextMeshPro textMesh = textGameObject.GetComponent<TextMeshPro>();
-                textMesh.text = this.grid[row, column].GetOptionsString();
-
-                textMeshGrid[row, column] = textMesh;
-            }
-        }
-    }
     private void Initialize()
     {
         this.tilemap.ClearAllTiles();
 
         InitializeTiles();
-        InitializeGrid();
-        InitializeDebugUi();
         InitializeRules();
         InitializeMarkers();
+    }
+
+    private void ResetDebugUi()
+    {
+        textMeshGrid = new TextMeshPro[this.grid.GetLength(0), this.grid.GetLength(1)];
+
+        GameObject parent = GameObject.Find("TextObjects");
+        for (int i = 0; i < parent.transform.childCount; i++)
+        {
+            Destroy(parent.transform.GetChild(i).gameObject);
+        }
+
+        for (int row = 0; row < this.grid.GetLength(0); row++)
+        {
+            for (int column = 0; column < this.grid.GetLength(1); column++)
+            {
+                GameObject textGameObject = Instantiate(debugTextPrefab, new Vector3(column + 0.5f, this.grid.GetLength(0) - 1 - row + 0.5f, 0), Quaternion.identity, parent.transform);
+                TextMeshPro textMesh = textGameObject.GetComponent<TextMeshPro>();
+                textMesh.text = "";
+
+                textMeshGrid[row, column] = textMesh;
+            }
+        }
+    }
+    private void ResetGrid(int width, int height)
+    {
+        this.grid = new Cell[height, width];
+
+        for (int row = 0; row < grid.GetLength(0); row++)
+        {
+            for (int column = 0; column < grid.GetLength(1); column++)
+            {
+                grid[row, column] = new Cell(this, row, column);
+            }
+        }
+    }
+    private void ResetWaveFunctionCollapse(int width, int height)
+    {
+        this.tilemap.ClearAllTiles();
+        ResetGrid(width,height);
+        ResetDebugUi();
+    }
+    private void Start()
+    {
+        Initialize();
     }
 
     private void Update()
@@ -415,7 +451,7 @@ public class WaveFunctionCollapse : MonoBehaviour
 
                 else if (state == State.Backtracking)
                 {
-                    if (collapsedCells[0].options.Count > 1)
+                    if (collapsedCells[0].getRealOptionsCount() > 1)
                     {
                         collapsedCells[0].ReCollapse();
                         this.state = State.Collapsing;
@@ -433,13 +469,32 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
     }
 
+    public void Pause()
+    {
+        this.state = State.Idle;
+    }
+
+    public void Continue()
+    {
+        this.state = State.Collapsing;
+    }
+
     public void Run(int width, int height, float speed)
     {
-        this.grid = new Cell[height, width];
         this.actionCooldown = speed;
 
-        Initialize();
+        ResetWaveFunctionCollapse(width,height);
 
         this.state = State.Collapsing;
+
+        /*CollapseNextCell();
+        DisplayGrid();
+        Invoke("Test", 1);*/
+    }
+
+    public void Test()
+    {
+        collapsedCells[0].UnCollapse();
+        DisplayGrid();
     }
 }
