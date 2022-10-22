@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -6,11 +5,192 @@ using static WaveFunctionCollapse;
 
 public class Cell
 {
+    public class OptionsWrapper
+    {
+        private Cell cell;
+        private WaveFunctionCollapse wfc;
+        private Options options;
+
+        public OptionsWrapper(WaveFunctionCollapse wfc, Cell cell, Options options)
+        {
+            this.cell = cell;
+            this.options = options;
+            this.wfc = wfc;
+        }
+
+        public Options GetOptions()
+        {
+            return (Options)this.options.Clone();
+        }
+
+        public void ChangeOptions(Options options)
+        {
+            this.options = options;
+            wfc.UpdateCellOptions(cell, options.GetCount());
+        }
+    }
+    public class Options : System.ICloneable
+    {
+        private Dictionary<int, List<Quaternion>> options = new Dictionary<int, List<Quaternion>>();
+
+        public Options() { }
+
+        public void RemoveOption(int option, Quaternion rotation)
+        {
+            if (this.options.ContainsKey(option))
+            {
+                if (this.options[option].Contains(rotation))
+                {
+                    this.options[option].Remove(rotation);
+
+                    if(this.options[option].Count == 0)
+                    {
+                        this.options.Remove(option);
+                    }
+                }
+            }
+        }
+
+        public void RemoveOption(int option, List<Quaternion> rotations)
+        {
+            if (this.options.ContainsKey(option))
+            {
+                foreach(Quaternion rotation in rotations)
+                {
+                    if (this.options[option].Contains(rotation))
+                    {
+                        this.options[option].Remove(rotation);
+                    }
+                }
+                if (this.options[option].Count == 0)
+                {
+                    this.options.Remove(option);
+                }
+            }
+        }
+
+        public void RemoveOptions(Options options)
+        {
+            foreach(int option in options.GetOptions())
+            {
+                List<Quaternion> rotations = options.getRotations(option);
+
+                RemoveOption(option, rotations);
+            }
+        }
+
+        public void AddOption(int option, Quaternion rotation)
+        {
+            if (this.options.ContainsKey(option))
+            {
+                if (!this.options[option].Contains(rotation))
+                {
+                    this.options[option].Add(rotation);
+                }
+            }
+            else
+            {
+                this.options.Add(option, new Quaternion[] { rotation }.ToList());
+            }
+        }
+
+        public void AddOption(int option, List<Quaternion> rotations)
+        {
+            if (this.options.ContainsKey(option))
+            {
+                foreach(Quaternion rotation in rotations)
+                {
+                    if (!this.options[option].Contains(rotation))
+                    {
+                        this.options[option].Add(rotation);
+                    }
+                }
+            }
+            else
+            {
+                this.options.Add(option, rotations);
+            }
+        }
+
+        public List<int> GetOptions()
+        {
+            List<int> cloneOptions = new List<int>();
+            foreach (int option in this.options.Keys)
+            {
+                cloneOptions.Add(option);
+            }
+
+            return cloneOptions;
+        }
+
+        public List<Quaternion> getRotations(int option)
+        {
+            if (!this.options.ContainsKey(option)) return new List<Quaternion>();
+
+            List<Quaternion> rotationsClone = new List<Quaternion>();
+            foreach (Quaternion rotation in this.options[option])
+            {
+                rotationsClone.Add(rotation);
+            }
+            return rotationsClone;
+        }
+        
+        public int GetCount()
+        {
+            return this.options.Count;
+        }
+
+        public KeyValuePair<int, List<Quaternion>> ElementAt(int i)
+        {
+            KeyValuePair<int, List<Quaternion>> elem = this.options.ElementAt(i);
+
+            return new KeyValuePair<int, List<Quaternion>>(elem.Key, getRotations(elem.Key));
+        }
+
+        public object Clone()
+        {
+            Options clone = new Options();
+
+            foreach (KeyValuePair<int, List<Quaternion>> keyVal in this.options)
+            {
+                int option = keyVal.Key;
+                List<Quaternion> rotations = keyVal.Value;
+
+                List<Quaternion> cloneRotations = new List<Quaternion>();
+                foreach (Quaternion rotation in rotations)
+                {
+                    cloneRotations.Add(rotation);
+                }
+
+                clone.AddOption(option, cloneRotations);
+            }
+
+            return clone;
+        }
+
+        public override string ToString()
+        {
+            string optionsString = "";
+            foreach (int option in options.Keys)
+            {
+                string rotationsString = "";
+                foreach (Quaternion rotation in this.options[option])
+                {
+                    rotationsString += rotation.eulerAngles.z + ".";
+                }
+
+                optionsString += option + ":" + rotationsString + "/";
+            }
+            return optionsString;
+        }
+    }
+
     public WaveFunctionCollapse wfc;
 
     public bool collapsed = false;
-    public Dictionary<int,List<Quaternion>> options = new Dictionary<int, List<Quaternion>>();
-    public Dictionary<int, List<Quaternion>> optionsBeforeCollapse = new Dictionary<int, List<Quaternion>>();
+    public Options options = new Options();
+    public Options optionsBeforeCollapse = new Options();
+    public Options wrongOptions = new Options();
 
     public int pick = -1;
     public Quaternion rotation = Quaternion.identity;
@@ -18,7 +198,7 @@ public class Cell
     public int row;
     public int column;
 
-    public Dictionary<int, List<Quaternion>> wrongPicks = new Dictionary<int, List<Quaternion>>();
+    
 
     // [TOP, RIGHT, BOTTOM, LEFT] no rotation
     // Each side will have 3 points that connect to other points
@@ -28,11 +208,11 @@ public class Cell
     {
         this.wfc = wfc;
 
-        this.options = new Dictionary<int, List<Quaternion>>();
+        this.options = new Options();
         for (int i = 0; i < wfc.getTileCount(); i++)
         {
-            List<Quaternion> rotations = new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList();
-            this.options.Add(i, rotations);
+            List<Quaternion> rotations = wfc.getTileWrapper(i).GetRotations();
+            this.options.AddOption(i, rotations);
         }
 
         this.collapsed = false;
@@ -52,40 +232,9 @@ public class Cell
 
     public int getRealOptionsCount()
     {
-        // Make sure when recollapsing that previous options are not repicked
-        Dictionary<int, List<Quaternion>> realOptions = Clone(this.options);
-        foreach (int wrongOption in this.wrongPicks.Keys)
-        {
-            foreach (Quaternion rotation in this.wrongPicks[wrongOption])
-            {
-                if (realOptions.ContainsKey(wrongOption) && realOptions[wrongOption].Contains(rotation))
-                {
-                    realOptions[wrongOption].Remove(rotation);
-                    if (realOptions[wrongOption].Count == 0) realOptions.Remove(wrongOption);
-                }
-            }
-        }
-        return realOptions.Count;
-    }
-
-    private Dictionary<int, List<Quaternion>> Clone(Dictionary<int, List<Quaternion>> options)
-    {
-        Dictionary<int, List<Quaternion>> cloneOptions = new Dictionary<int, List<Quaternion>>();
-        foreach(KeyValuePair<int, List<Quaternion>> keyVal in options)
-        {
-            int option = keyVal.Key;
-            List<Quaternion> rotations = keyVal.Value;
-
-            List<Quaternion> cloneRotations = new List<Quaternion>();
-            foreach(Quaternion rotation in rotations)
-            {
-                cloneRotations.Add(rotation);
-            }
-
-            cloneOptions.Add(option, cloneRotations);
-        }
-
-        return cloneOptions;
+        Options realOptions = (Options)this.options.Clone();
+        realOptions.RemoveOptions(wrongOptions);
+        return realOptions.GetCount();
     }
 
     public string Collapse()
@@ -93,21 +242,11 @@ public class Cell
         if (collapsed) return "ERROR";
 
         // Make sure when recollapsing that previous options are not repicked
-        Dictionary<int, List<Quaternion>> realOptions = Clone(this.options);
-        foreach (int wrongOption in this.wrongPicks.Keys)
-        {
-            foreach(Quaternion rotation in this.wrongPicks[wrongOption])
-            {
-                if(realOptions.ContainsKey(wrongOption) && realOptions[wrongOption].Contains(rotation))
-                {
-                    realOptions[wrongOption].Remove(rotation);
-                    if (realOptions[wrongOption].Count == 0) realOptions.Remove(wrongOption);
-                }
-            }
-        }
+        Options realOptions = (Options)this.options.Clone();
+        realOptions.RemoveOptions(wrongOptions);
 
         // If no options remain, time to backtrack
-        if (realOptions.Count == 0)
+        if (realOptions.GetCount() == 0)
         {
             wfc.DisplayError(row,column);
             return "BACKTRACK";
@@ -116,7 +255,7 @@ public class Cell
         // Select random pick from options and update neighbours
         else
         {
-            int r = Random.Range(0, realOptions.Count);
+            int r = Random.Range(0, realOptions.GetCount());
             KeyValuePair<int, List<Quaternion>> keyValuePair = realOptions.ElementAt(r);
 
             this.pick = keyValuePair.Key;
@@ -129,13 +268,13 @@ public class Cell
             catch(System.Exception e)
             {
                 Debug.Log("-------------------");
-                Debug.Log(GetLongOptionsString(this.options));
-                Debug.Log(GetLongOptionsString(realOptions));
+                Debug.Log(this.options.ToString());
+                Debug.Log(realOptions.ToString());
                 Debug.Log("-------------------");
             }
 
             this.collapsed = true;
-            optionsBeforeCollapse = Clone(this.options);
+            optionsBeforeCollapse = (Options)this.options.Clone();
             wfc.AddToCollapsedCells(this);
 
             UpdateNeighborAfterCollapse();
@@ -150,11 +289,7 @@ public class Cell
 
         UnCollapse();
 
-        if (!wrongPicks.ContainsKey(lastPick)) wrongPicks.Add(lastPick, new Quaternion[] { lastRotation }.ToList());
-        else
-        {
-            if (!wrongPicks[lastPick].Contains(lastRotation)) wrongPicks[lastPick].Add(lastRotation);
-        }
+        wrongOptions.AddOption(lastPick, lastRotation);
 
         string status = Collapse();
 
@@ -162,7 +297,7 @@ public class Cell
     }
     public void Reset()
     {
-        this.wrongPicks = new Dictionary<int, List<Quaternion>>();
+        this.wrongOptions = new Options();
         UnCollapse();
     }
     public string UnCollapse()
@@ -173,8 +308,8 @@ public class Cell
         this.collapsed = false;
         this.rotation = Quaternion.identity;
 
-        this.options = new Dictionary<int, List<Quaternion>>(this.optionsBeforeCollapse);
-        this.optionsBeforeCollapse = new Dictionary<int, List<Quaternion>>();
+        this.options = (Options)this.optionsBeforeCollapse.Clone();
+        this.optionsBeforeCollapse = new Options();
 
         wfc.RemoveFromCollapsedCells(this);
 
@@ -334,9 +469,9 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                int previousNeighborOptionsCount = neighborCell.options.Count;
+                int previousNeighborOptionsCount = neighborCell.options.GetCount();
                 neighborCell.UpdateOptionsNeighborOptions(Side.BOTTOM, this.options);
-                int currentNeighborOptionsCount = neighborCell.options.Count;
+                int currentNeighborOptionsCount = neighborCell.options.GetCount();
                 if (previousNeighborOptionsCount > currentNeighborOptionsCount && currentNeighborOptionsCount != 0) neighborCell.UpdateNeighborAfterOptionReduce();
             }
         }
@@ -349,9 +484,9 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                int previousNeighborOptionsCount = neighborCell.options.Count;
+                int previousNeighborOptionsCount = neighborCell.options.GetCount();
                 neighborCell.UpdateOptionsNeighborOptions(Side.LEFT, this.options);
-                int currentNeighborOptionsCount = neighborCell.options.Count;
+                int currentNeighborOptionsCount = neighborCell.options.GetCount();
                 if (previousNeighborOptionsCount > currentNeighborOptionsCount && currentNeighborOptionsCount != 0) neighborCell.UpdateNeighborAfterOptionReduce();
             }
         }
@@ -364,9 +499,9 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                int previousNeighborOptionsCount = neighborCell.options.Count;
+                int previousNeighborOptionsCount = neighborCell.options.GetCount();
                 neighborCell.UpdateOptionsNeighborOptions(Side.TOP, this.options);
-                int currentNeighborOptionsCount = neighborCell.options.Count;
+                int currentNeighborOptionsCount = neighborCell.options.GetCount();
                 if (previousNeighborOptionsCount > currentNeighborOptionsCount && currentNeighborOptionsCount != 0) neighborCell.UpdateNeighborAfterOptionReduce();
             }
         }
@@ -379,9 +514,9 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                int previousNeighborOptionsCount = neighborCell.options.Count;
+                int previousNeighborOptionsCount = neighborCell.options.GetCount();
                 neighborCell.UpdateOptionsNeighborOptions(Side.RIGHT, this.options);
-                int currentNeighborOptionsCount = neighborCell.options.Count;
+                int currentNeighborOptionsCount = neighborCell.options.GetCount();
                 if (previousNeighborOptionsCount > currentNeighborOptionsCount && currentNeighborOptionsCount != 0) neighborCell.UpdateNeighborAfterOptionReduce();
             }
         }
@@ -400,11 +535,11 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                int previousOptionsCount = neighborCell.options.Count;
+                int previousOptionsCount = neighborCell.options.GetCount();
                 neighborCell.ResetOptions();
                 neighborCell.UpdateOptionsDirectNeighbors();
                 neighborCell.UpdateOptionsNeighborOptions(Side.BOTTOM, this.options);
-                int currentOptionsCount = neighborCell.options.Count;
+                int currentOptionsCount = neighborCell.options.GetCount();
                 if (previousOptionsCount < currentOptionsCount) neighborCell.UpdateNeighborAfterOptionIncrease();
             }
         }
@@ -417,11 +552,11 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                int previousOptionsCount = neighborCell.options.Count;
+                int previousOptionsCount = neighborCell.options.GetCount();
                 neighborCell.ResetOptions();
                 neighborCell.UpdateOptionsDirectNeighbors();
                 neighborCell.UpdateOptionsNeighborOptions(Side.LEFT, this.options);
-                int currentOptionsCount = neighborCell.options.Count;
+                int currentOptionsCount = neighborCell.options.GetCount();
                 if (previousOptionsCount < currentOptionsCount) neighborCell.UpdateNeighborAfterOptionIncrease();
             }
         }
@@ -434,11 +569,11 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                int previousOptionsCount = neighborCell.options.Count;
+                int previousOptionsCount = neighborCell.options.GetCount();
                 neighborCell.ResetOptions();
                 neighborCell.UpdateOptionsDirectNeighbors();
                 neighborCell.UpdateOptionsNeighborOptions(Side.TOP, this.options);
-                int currentOptionsCount = neighborCell.options.Count;
+                int currentOptionsCount = neighborCell.options.GetCount();
                 if (previousOptionsCount < currentOptionsCount) neighborCell.UpdateNeighborAfterOptionIncrease();
             }
         }
@@ -451,11 +586,11 @@ public class Cell
             Cell neighborCell = wfc.GetCell(newRow, newColumn);
             if (!neighborCell.collapsed)
             {
-                int previousOptionsCount = neighborCell.options.Count;
+                int previousOptionsCount = neighborCell.options.GetCount();
                 neighborCell.ResetOptions();
                 neighborCell.UpdateOptionsDirectNeighbors();
                 neighborCell.UpdateOptionsNeighborOptions(Side.RIGHT, this.options);
-                int currentOptionsCount = neighborCell.options.Count;
+                int currentOptionsCount = neighborCell.options.GetCount();
                 if (previousOptionsCount < currentOptionsCount) neighborCell.UpdateNeighborAfterOptionIncrease();
             }
         }
@@ -473,7 +608,46 @@ public class Cell
     public void AddRule(Side side, string[] rule)
     {
         if (rule.Length != 3) return;
+
+        // Add rule to rules class variable
         if (side == Side.TOP)
+        {
+            for (int i = 0; i < rules.GetLength(1); i++)
+            {
+                rules[0, i] = rule[i];
+            }
+        }
+        if (side == Side.RIGHT)
+        {
+            for (int i = 0; i < rules.GetLength(1); i++)
+            {
+                rules[1, i] = rule[i];
+            }
+        }
+        if (side == Side.BOTTOM)
+        {
+            for (int i = 0; i < rules.GetLength(1); i++)
+            {
+                rules[2, i] = rule[i];
+            }
+        }
+        if (side == Side.LEFT)
+        {
+            for (int i = 0; i < rules.GetLength(1); i++)
+            {
+                rules[3, i] = rule[i];
+            }
+        }
+
+        // Update the options after adding a rule.
+        // Options decreased => update neighbors of this cell.
+        int previousOptionsCount = this.options.GetCount();
+        UpdateOptionsRule(side, rule);
+        int currentOptionsCount = this.options.GetCount();
+        if (previousOptionsCount != currentOptionsCount && currentOptionsCount != 0) UpdateNeighborAfterOptionReduce();
+
+
+        /*if (side == Side.TOP)
         {
             for (int i = 0; i < rules.GetLength(1); i++)
             {
@@ -504,10 +678,10 @@ public class Cell
         int previousOptionsCount = this.options.Count;
         UpdateOptionsDirectNeighbors();
         int currentOptionsCount = this.options.Count;
-        if (previousOptionsCount != currentOptionsCount && currentOptionsCount != 0) UpdateNeighborAfterOptionReduce();
+        if (previousOptionsCount != currentOptionsCount && currentOptionsCount != 0) UpdateNeighborAfterOptionReduce();*/
     }
 
-    public void RemoveRule(Side side, Dictionary<int, List<Quaternion>> neighborOptions)
+    public void RemoveRule(Side side, Options neighborOptions)
     {
         if (side == Side.TOP)
         {
@@ -538,96 +712,107 @@ public class Cell
             }
         }
 
-        int previousOptionsCount = this.options.Count;
+        int previousOptionsCount = this.options.GetCount();
         ResetOptions();
         UpdateOptionsDirectNeighbors();
         UpdateOptionsNeighborOptions(side, neighborOptions);
-        int currentOptionsCount = this.options.Count;
+        int currentOptionsCount = this.options.GetCount();
         if (previousOptionsCount < currentOptionsCount) UpdateNeighborAfterOptionIncrease();
     }
 
     private void ResetOptions()
     {
-        this.options = new Dictionary<int, List<Quaternion>>();
-        List<Quaternion> rotations = new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList();
+        this.options = new Options();
         for (int i = 0; i < wfc.getTileCount(); i++)
         {
-            this.options.Add(i, rotations);
+            List<Quaternion> rotations = wfc.getTileWrapper(i).GetRotations();
+            this.options.AddOption(i, rotations);
         }
     }
-    private void UpdateOptionsDirectNeighbors()
-    {
-        Dictionary<int, List<Quaternion>> newOptions = new Dictionary<int, List<Quaternion>>();
 
-        foreach (int option in this.options.Keys)
+    private void UpdateOptionsRule(Side side, string[] rule)
+    {
+        Options newOptions = new Options();
+
+        foreach (int option in this.options.GetOptions())
         {
+            TileWrapper tileWrapper = wfc.getTileWrapper(option);
+            List<Quaternion> rotations = this.options.getRotations(option);
+
             List<Quaternion> validRotations = new List<Quaternion>();
 
-            Quaternion rotation = Quaternion.identity;
-            if(CheckRules(option, rotation))
+            foreach (Quaternion rotation in rotations)
             {
-                validRotations.Add(rotation);
+                string[] sideRule = tileWrapper.GetSide(side, rotation);
+                if (CheckRule(sideRule, rule))
+                {
+                    validRotations.Add(rotation);
+                }
             }
 
-            rotation = Quaternion.Euler(0, 0, 90);
-            if (CheckRules(option, rotation))
-            {
-                validRotations.Add(rotation);
-            }
-
-            rotation = Quaternion.Euler(0, 0, 180);
-            if (CheckRules(option, rotation))
-            {
-                validRotations.Add(rotation);
-            }
-
-            rotation = Quaternion.Euler(0, 0, 270);
-            if (CheckRules(option, rotation))
-            {
-                validRotations.Add(rotation);
-            }
-
-            if (validRotations.Count > 0) newOptions.Add(option, validRotations);
+            if (validRotations.Count > 0) newOptions.AddOption(option, validRotations);
         }
 
         this.options = newOptions;
     }
-    private void UpdateOptionsNeighborOptions(Side side, Dictionary<int, List<Quaternion>> neighborOptions)
+    private void UpdateOptionsDirectNeighbors()
     {
-        Dictionary<int, List<Quaternion>> newOptions = new Dictionary<int, List<Quaternion>>();
+        Options newOptions = new Options();
 
-        foreach (int neighborOption in neighborOptions.Keys)
+        foreach (int option in this.options.GetOptions())
+        {
+            TileWrapper tileWrapper = wfc.getTileWrapper(option);
+            List<Quaternion> rotations = this.options.getRotations(option);
+
+            List<Quaternion> validRotations = new List<Quaternion>();
+
+            foreach (Quaternion rotation in rotations)
+            {
+                if (CheckRules(option, rotation))
+                {
+                    validRotations.Add(rotation);
+                }
+            }
+
+            if (validRotations.Count > 0) newOptions.AddOption(option, validRotations);
+        }
+
+        this.options = newOptions;
+    }
+    private void UpdateOptionsNeighborOptions(Side side, Options neighborOptions)
+    {
+        Options newOptions = new Options();
+
+        // Check for every neighbor option which options can be placed next to these options
+        // If an options cannot be placed next to all neighbor options then that option is no longer possible and will be removed
+        foreach (int neighborOption in neighborOptions.GetOptions())
         {
             TileWrapper neighborTileWrapper = wfc.getTileWrapper(neighborOption);
-            foreach (Quaternion neighborRotation in neighborOptions[neighborOption])
+
+            List<Quaternion> neighborRotations = neighborOptions.getRotations(neighborOption);
+            foreach (Quaternion neighborRotation in neighborRotations)
             {
                 string[] neighborSideMarkers = neighborTileWrapper.GetSide(wfc.ReverseSide(side), neighborRotation);
 
-                foreach (int option in this.options.Keys)
+                foreach (int option in this.options.GetOptions())
                 {
                     List<Quaternion> validRotations = new List<Quaternion>();
                     TileWrapper tileWrapper = wfc.getTileWrapper(option);
 
-                    List<Quaternion> rotations = this.options[option];
+                    List<Quaternion> rotations = this.options.getRotations(option);
                     foreach(Quaternion rotation in rotations)
                     {
                         string[] sideMarkers = tileWrapper.GetSide(side, rotation);
                         if (CheckRule(sideMarkers, neighborSideMarkers))
                         {
                             validRotations.Add(rotation);
+                            this.options.RemoveOption(option, rotation);
                         }
                     }
 
                     if (validRotations.Count > 0)
                     {
-                        if (!newOptions.ContainsKey(option)) newOptions.Add(option, validRotations);
-                        else
-                        {
-                            foreach (Quaternion validRotation in validRotations)
-                            {
-                                if (!newOptions[option].Contains(validRotation)) newOptions[option].Add(validRotation);
-                            }
-                        }
+                        newOptions.AddOption(option, validRotations);
                     }
                 }
             }
@@ -698,33 +883,12 @@ public class Cell
         return shiftStrings;
     }
 
-    private void DebugOptions()
-    {
-        Debug.Log(GetOptionsString());
-    }
-
     public string GetOptionsString()
     {
         string optionsString = "";
-        foreach (int option in this.options.Keys)
+        foreach (int option in this.options.GetOptions())
         {
             optionsString += option + "/";
-        }
-        return optionsString;
-    }
-
-    public string GetLongOptionsString(Dictionary<int, List<Quaternion>> options)
-    {
-        string optionsString = "";
-        foreach (int option in options.Keys)
-        {
-            string rotationsString = "";
-            foreach(Quaternion rotation in this.options[option])
-            {
-                rotationsString += rotation.eulerAngles.z + ".";
-            }
-
-            optionsString += option + ":" + rotationsString + "/";
         }
         return optionsString;
     }
@@ -732,19 +896,20 @@ public class Cell
     public string GetDisplayOptionsString()
     {
         string optionsString = "All Possible Options: \n";
-        foreach (int option in options.Keys)
+        foreach (int option in options.GetOptions())
         {
             TileWrapper tileWrapper = wfc.getTileWrapper(option);
             optionsString += tileWrapper.tile.name + ":\n";
 
             string rotationsString = "Rotations: ";
-            for (int i = 0; i < this.options[option].Count; i++)
+            List<Quaternion> rotations = this.options.getRotations(option);
+            for (int i = 0; i < rotations.Count; i++)
             {
-                Quaternion rotation = this.options[option][i];
+                Quaternion rotation = rotations[i];
 
                 if (i == 0) rotationsString += "{ ";
                 rotationsString += rotation.eulerAngles.z;
-                if (i == this.options[option].Count - 1) rotationsString += " }";
+                if (i == rotations.Count - 1) rotationsString += " }";
                 else
                 {
                     rotationsString += "/";

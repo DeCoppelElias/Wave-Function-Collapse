@@ -22,6 +22,11 @@ public class WaveFunctionCollapse : MonoBehaviour
 
     private List<Cell> collapsedCells = new List<Cell>();
 
+    private Cell nextCell;
+    private int shortestOptionCount = int.MaxValue;
+
+    private bool pause = false;
+
     [SerializeField]
     private Tilemap tilemap;
     [SerializeField]
@@ -110,14 +115,14 @@ public class WaveFunctionCollapse : MonoBehaviour
             {
                 Cell currentCell = grid[row, column];
 
-                if(!currentCell.collapsed && currentCell.options.Count < shortestAmount)
+                if(!currentCell.collapsed && currentCell.options.GetCount() < shortestAmount)
                 {
                     cells = new List<Cell>();
                     cells.Add(currentCell);
 
-                    shortestAmount = currentCell.options.Count;
+                    shortestAmount = currentCell.options.GetCount();
                 }
-                else if(!currentCell.collapsed && currentCell.options.Count == shortestAmount)
+                else if(!currentCell.collapsed && currentCell.options.GetCount() == shortestAmount)
                 {
                     cells.Add(currentCell);
                 }
@@ -148,7 +153,7 @@ public class WaveFunctionCollapse : MonoBehaviour
     private void DebugCell(Cell cell)
     {
         string options = "";
-        foreach(int option in cell.options.Keys)
+        foreach(int option in cell.options.GetOptions())
         {
             options += tiles[option].tile.name + " / ";
         }
@@ -227,6 +232,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "","","" }, 
                     { "","","" }, 
                     { "","","" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             if (tile.name == "grasstile")
             {
@@ -235,6 +242,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "Grass","Grass","Grass" },
                     { "Grass","Grass","Grass" },
                     { "Grass","Grass","Grass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile2")
             {
@@ -243,6 +252,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "WaterGrass","Water","Water" },
                     { "Water","Water","Water" },
                     { "Water","Water","WaterGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile3")
             {
@@ -251,6 +262,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "Water","Water","WaterGrass" },
                     { "WaterGrass","Water","Water" },
                     { "Water","Water","WaterGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile4")
             {
@@ -259,6 +272,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "ShortGrass","ShortGrass","ShortGrass" },
                     { "WaterGrass","Water","WaterGrass" },
                     { "ShortGrass","ShortGrass","ShortGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile5")
             {
@@ -267,6 +282,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "WaterGrass","Water","Water" },
                     { "Water","Water","WaterGrass" },
                     { "ShortGrass","ShortGrass","ShortGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile6")
             {
@@ -275,6 +292,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "Water","Water","Water" },
                     { "Water","Water","Water" },
                     { "Water","Water","Water" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile7")
             {
@@ -283,6 +302,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "WaterGrass","Water","WaterGrass" },
                     { "ShortGrass","ShortGrass","ShortGrass" },
                     { "ShortGrass","ShortGrass","ShortGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile8")
             {
@@ -291,6 +312,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "Water","Water","Water" },
                     { "Water","Water","Water" },
                     { "Water","Water","WaterGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile9")
             {
@@ -299,6 +322,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "WaterGrass","Water","WaterGrass" },
                     { "WaterGrass","Water","WaterGrass" },
                     { "WaterGrass","Water","Water" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile10")
             {
@@ -307,6 +332,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "WaterGrass","Water","WaterGrass" },
                     { "ShortGrass","ShortGrass","ShortGrass" },
                     { "WaterGrass","Water","WaterGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile11")
             {
@@ -315,6 +342,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "WaterGrass","Water","WaterGrass" },
                     { "ShortGrass","ShortGrass","ShortGrass" },
                     { "WaterGrass","Water","WaterGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile12")
             {
@@ -323,6 +352,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "WaterGrass","Water","WaterGrass" },
                     { "WaterGrass","Water","WaterGrass" },
                     { "WaterGrass","Water","WaterGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile13")
             {
@@ -331,6 +362,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "WaterGrass","Water","Water" },
                     { "Water","Water","Water" },
                     { "Water","Water","WaterGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile14")
             {
@@ -339,6 +372,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "ShortGrass","ShortGrass","ShortGrass" },
                     { "ShortGrass","ShortGrass","ShortGrass" },
                     { "ShortGrass","ShortGrass","ShortGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile15")
             {
@@ -347,6 +382,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "WaterGrass","Water","WaterGrass" },
                     { "ShortGrass","ShortGrass","ShortGrass" },
                     { "WaterGrass","Water","Water" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "rivertile16")
             {
@@ -355,6 +392,48 @@ public class WaveFunctionCollapse : MonoBehaviour
                     { "Water","Water","WaterGrass" },
                     { "ShortGrass","ShortGrass","ShortGrass" },
                     { "WaterGrass","Water","WaterGrass" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
+            }
+            else if (tile.name == "mountaintile0")
+            {
+                tileWrapper.SetSides(new string[,] {
+                    { "StartMountain","StartMountain","StartMountain" },
+                    { "WaterMountain","Water","Water" },
+                    { "Water","Water","Water" },
+                    { "Water","Water","WaterMountain" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
+            }
+            else if (tile.name == "mountaintile1")
+            {
+                tileWrapper.SetSides(new string[,] {
+                    { "Mountain","Mountain","Mountain" },
+                    { "Mountain","Mountain","Mountain" },
+                    { "Mountain","Mountain","Mountain" },
+                    { "Mountain","Mountain","Mountain" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity }.ToList());
+            }
+            else if (tile.name == "mountaintile2")
+            {
+                tileWrapper.SetSides(new string[,] {
+                    { "WaterMountain","Water","Water" },
+                    { "Water","Water","Water" },
+                    { "Water","Water","Water" },
+                    { "Water","Water","WaterMountain" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
+            }
+            else if (tile.name == "mountaintile3")
+            {
+                tileWrapper.SetSides(new string[,] {
+                    { "StartMountain","StartMountain","StartMountain" },
+                    { "Mountain","Mountain","Grass" },
+                    { "Grass","Grass","Grass" },
+                    { "Grass","Mountain","Mountain" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
         }
     }
@@ -366,6 +445,9 @@ public class WaveFunctionCollapse : MonoBehaviour
         markers.Add("ShortGrass", new string[] { "Grass" });
         markers.Add("Grass", new string[] { "ShortGrass" , "Grass"});
         markers.Add("WaterGrass", new string[] { "WaterGrass" });
+        markers.Add("Mountain", new string[] { "Mountain", "StartMountain" });
+        markers.Add("StartMountain", new string[] { "Mountain" });
+        markers.Add("WaterMountain", new string[] { "WaterMountain" });
     }
     private void Initialize()
     {
@@ -416,6 +498,15 @@ public class WaveFunctionCollapse : MonoBehaviour
         ResetGrid(width,height);
         ResetDebugUi();
     }
+
+    public void UpdateCellOptions(Cell cell, int optionCount)
+    {
+        if(optionCount < shortestOptionCount)
+        {
+            shortestOptionCount = optionCount;
+            this.nextCell = cell;
+        }
+    }
     private void Start()
     {
         Initialize();
@@ -423,6 +514,7 @@ public class WaveFunctionCollapse : MonoBehaviour
 
     private void Update()
     {
+        if (pause) return;
         if (state == State.Idle) return;
         if(Time.time - lastAction > actionCooldown)
         {
@@ -471,12 +563,12 @@ public class WaveFunctionCollapse : MonoBehaviour
 
     public void Pause()
     {
-        this.state = State.Idle;
+        this.pause = true;
     }
 
     public void Continue()
     {
-        this.state = State.Collapsing;
+        this.pause = false;
     }
 
     public void Run(int width, int height, float speed)

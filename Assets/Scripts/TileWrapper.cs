@@ -12,6 +12,8 @@ public class TileWrapper
     //[TOP, RIGHT, BOTTOM, LEFT] if not rotated
     public string[,] sides = new string[4, 3];
 
+    public List<Quaternion> possibleRotations;
+
     public TileWrapper(Tile tile)
     {
         this.tile = tile;
@@ -58,6 +60,18 @@ public class TileWrapper
     {
         if (sides.GetLength(0) != 4) return;
         this.sides = (string[,])sides.Clone();
+    }
+
+    public void SetRotations(List<Quaternion> rotations)
+    {
+        this.possibleRotations = rotations;
+    }
+
+    public List<Quaternion> GetRotations()
+    {
+        List<Quaternion> result = new List<Quaternion>();
+        foreach (Quaternion rotation in this.possibleRotations) result.Add(rotation);
+        return result;
     }
 
     private string[,] ShiftArrayRight(string[,] strings, int amount)
