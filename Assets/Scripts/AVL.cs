@@ -9,15 +9,9 @@ public class AVL
     {
         public Node left;
         public Node right;
-        public Vector3Int tilePosition;
-
-        public Node(Vector3Int tilePosition)
-        {
-            this.tilePosition = tilePosition;
-        }
         public abstract object Clone();
 
-        public abstract float getCost();
+        public abstract float GetCost();
 
         public override abstract int GetHashCode();
     }
@@ -49,12 +43,12 @@ public class AVL
             current = n;
             return current;
         }
-        else if (n.getCost() < current.getCost())
+        else if (n.GetCost() < current.GetCost())
         {
             current.left = RecursiveInsert(current.left, n);
             current = balance_tree(current);
         }
-        else if (n.getCost() >= current.getCost())
+        else if (n.GetCost() >= current.GetCost())
         {
             current.right = RecursiveInsert(current.right, n);
             current = balance_tree(current);
@@ -101,7 +95,7 @@ public class AVL
         else
         {
             //left subtree
-            if (node.getCost() < current.getCost())
+            if (node.GetCost() < current.GetCost())
             {
                 current.left = Delete(current.left, node, current);
                 if (balance_factor(current) == -2)//here
@@ -117,7 +111,7 @@ public class AVL
                 }
             }
             //right subtree
-            else if (node.getCost() > current.getCost())
+            else if (node.GetCost() > current.GetCost())
             {
                 current.right = Delete(current.right, node, current);
                 if (balance_factor(current) == 2)
@@ -132,7 +126,7 @@ public class AVL
                     }
                 }
             }
-            else if (node.getCost() == current.getCost() && node.tilePosition != current.tilePosition)
+            else if (node.GetCost() == current.GetCost() && node.GetHashCode() != current.GetHashCode())
             {
                 if (Contains(current.right, node))
                 {
@@ -166,15 +160,11 @@ public class AVL
                 }
                 else
                 {
-                    UnityEngine.Debug.Log(node.tilePosition);
-                    //displayTree();
-                    //printAllHash();
-                    //checkIfSameHashcodeInTree(node);
                     throw new Exception("Node not in tree");
                 }
             }
             //if target is found
-            else if (node.getCost() == current.getCost() && node.tilePosition == current.tilePosition)
+            else if (node.GetCost() == current.GetCost() && node.GetHashCode() == current.GetHashCode())
             {
                 if (current.right != null)
                 {
@@ -208,17 +198,17 @@ public class AVL
         }
         return current;
     }
-    public bool contains(Vector3Int tilePosition)
+    public bool contains(Node other)
     {
-        return this.contains(this.root, tilePosition);
+        return this.contains(this.root, other);
     }
-    private bool contains(Node root, Vector3Int tilePosition)
+    private bool contains(Node root, Node other)
     {
         if (root == null) return false;
-        if(root.tilePosition != tilePosition)
+        if(root.GetHashCode() != other.GetHashCode())
         {
-            bool left = contains(root.left, tilePosition);
-            bool right = contains(root.right, tilePosition);
+            bool left = contains(root.left, other);
+            bool right = contains(root.right, other);
             if(left || right)
             {
                 return true;
@@ -239,9 +229,7 @@ public class AVL
                 if(node.GetHashCode() == search.GetHashCode())
                 {
                     UnityEngine.Debug.Log("Node with same hascode found");
-                    UnityEngine.Debug.Log("Original node location: " + search.tilePosition);
                     UnityEngine.Debug.Log("Original node hashcode: " + search.GetHashCode());
-                    UnityEngine.Debug.Log("Other node location: " + node.tilePosition);
                     UnityEngine.Debug.Log("Other node hashcode: " + node.GetHashCode());
                     return;
                 }
@@ -272,7 +260,7 @@ public class AVL
             string result = "";
             foreach (Node node in nodes)
             {
-                result += node.tilePosition.ToString();
+                result += node.GetHashCode();
             }
             UnityEngine.Debug.Log(result);
         }
@@ -361,8 +349,8 @@ public class AVL
 
     private bool Contains(Node root, Node find)
     {
-        if(root == find) return true;
         if (root == null) return false;
+        if (root.GetHashCode() == find.GetHashCode()) return true;
         else
         {
             bool left = Contains(root.left,find);

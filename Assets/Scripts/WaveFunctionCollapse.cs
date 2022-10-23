@@ -8,6 +8,42 @@ using UnityEngine.UI;
 
 public class WaveFunctionCollapse : MonoBehaviour
 {
+    private class CellNode : AVL.Node
+    {
+        public int row;
+        public int column;
+        public int optionCount;
+
+        public CellNode(int row, int column, int optionCount)
+        {
+            this.row = row;
+            this.column = column;
+            this.optionCount = optionCount;
+        }
+        public override object Clone()
+        {
+            return new CellNode(row, column, optionCount);
+        }
+
+        public override float GetCost()
+        {
+            return optionCount;
+        }
+
+        public override int GetHashCode()
+        {
+            return this.row + (1000000 * this.column);
+        }
+
+        public override bool Equals(object other)
+        {
+            if (!(other is CellNode)) return false;
+
+            CellNode otherCellNode = (CellNode)other;
+            return (otherCellNode.row == this.row && otherCellNode.column == this.column);
+        }
+    }
+
     private enum State { Idle, Collapsing, Backtracking}
     private State state = State.Idle;
 
@@ -16,16 +52,17 @@ public class WaveFunctionCollapse : MonoBehaviour
     private Dictionary<string, string[]> markers = new Dictionary<string, string[]>();
 
     private Cell[,] grid = new Cell[0, 0];
+    private AVL cellTree = new AVL();
     private Dictionary<int, TileWrapper> tiles = new Dictionary<int, TileWrapper>();
 
     private TextMeshPro[,] textMeshGrid;
 
     private List<Cell> collapsedCells = new List<Cell>();
 
-    private Cell nextCell;
-    private int shortestOptionCount = int.MaxValue;
-
     private bool pause = false;
+
+    [SerializeField]
+    private bool debug = false;
 
     [SerializeField]
     private Tilemap tilemap;
@@ -106,7 +143,10 @@ public class WaveFunctionCollapse : MonoBehaviour
 
     private Cell NextCell()
     {
-        int shortestAmount = int.MaxValue;
+        CellNode cellNode = (CellNode)cellTree.PopMinValue();
+        if (cellNode == null) return null;
+        return grid[cellNode.row,cellNode.column];
+        /*int shortestAmount = int.MaxValue;
         List<Cell> cells = new List<Cell>();
 
         for(int row = 0; row < grid.GetLength(0); row++)
@@ -133,7 +173,7 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         int r = Random.Range(0, cells.Count);
 
-        return cells[r];
+        return cells[r];*/
     }
 
     private string CollapseNextCell()
@@ -145,12 +185,15 @@ public class WaveFunctionCollapse : MonoBehaviour
             return "FINISHED";
         }
 
+        /*Debug.Log("Will collapse cell: ");
+        DebugCell(nextCell);*/
+
         string status = nextCell.Collapse();
 
         return status;
     }
 
-    private void DebugCell(Cell cell)
+    public void DebugCell(Cell cell)
     {
         string options = "";
         foreach(int option in cell.options.GetOptions())
@@ -189,13 +232,13 @@ public class WaveFunctionCollapse : MonoBehaviour
 
             tilemap.SetTile(position, tile);
 
-            this.textMeshGrid[cell.row, cell.column].text = "";
+            if (debug) this.textMeshGrid[cell.row, cell.column].text = "";
         }
         else
         {
             tilemap.SetTile(position, empty);
 
-            this.textMeshGrid[cell.row, cell.column].text = cell.GetOptionsString();
+            if (debug) this.textMeshGrid[cell.row, cell.column].text = cell.GetOptionsString();
         }
     }
 
@@ -468,6 +511,7 @@ public class WaveFunctionCollapse : MonoBehaviour
             Destroy(parent.transform.GetChild(i).gameObject);
         }
 
+        if (!debug) return;
         for (int row = 0; row < this.grid.GetLength(0); row++)
         {
             for (int column = 0; column < this.grid.GetLength(1); column++)
@@ -494,32 +538,64 @@ public class WaveFunctionCollapse : MonoBehaviour
     }
     private void ResetWaveFunctionCollapse(int width, int height)
     {
+        this.cellTree = new AVL();
+        this.collapsedCells = new List<Cell>();
         this.tilemap.ClearAllTiles();
         ResetGrid(width,height);
         ResetDebugUi();
     }
 
-    public void UpdateCellOptions(Cell cell, int optionCount)
+    public void RemoveCellFromTree(Cell cell)
     {
-        if(optionCount < shortestOptionCount)
+        CellNode cellNode = new CellNode(cell.row, cell.column, cell.options.GetCount());
+        if (cellTree.contains(cellNode))
         {
-            shortestOptionCount = optionCount;
-            this.nextCell = cell;
+            this.cellTree.Delete(cellNode);
         }
     }
+
+    public void AddCellToTree(Cell cell)
+    {
+        CellNode cellNode = new CellNode(cell.row, cell.column, cell.options.GetCount());
+        this.cellTree.Add(cellNode);
+    }
+
     private void Start()
     {
         Initialize();
+
+        TestTree();
+    }
+
+    private void TestTree()
+    {
+        CellNode testNode1 = new CellNode(0, 0, 5);
+        CellNode testNode2 = new CellNode(1, 0, 3);
+        CellNode testNode3 = new CellNode(2, 0, 5);
+        CellNode testNode4 = new CellNode(0, 1, 5);
+        CellNode testNode5 = new CellNode(1, 1, 3);
+        CellNode testNode6 = new CellNode(2, 1, 5);
+
+        AVL avl = new AVL();
+        avl.Add(testNode1);
+        avl.Add(testNode2);
+        avl.Add(testNode3);
+        avl.Add(testNode4);
+        avl.Add(testNode5);
+        avl.Add(testNode6);
+
+        avl.Delete(testNode3);
+        avl.PopMinValue();
     }
 
     private void Update()
     {
         if (pause) return;
         if (state == State.Idle) return;
-        if(Time.time - lastAction > actionCooldown)
+        if (Time.time - lastAction > actionCooldown)
         {
             int counter = 0;
-            while(counter < stepsPerFrame)
+            while (counter < stepsPerFrame)
             {
                 lastAction = Time.time;
 
@@ -534,6 +610,7 @@ public class WaveFunctionCollapse : MonoBehaviour
                     else if (status == "BACKTRACK")
                     {
                         state = State.Backtracking;
+                        Debug.Log("BACKTRACKING");
                     }
                     else if (status == "ERROR")
                     {
@@ -545,11 +622,13 @@ public class WaveFunctionCollapse : MonoBehaviour
                 {
                     if (collapsedCells[0].getRealOptionsCount() > 1)
                     {
+                        Debug.Log("Recollapsing Cell");
                         collapsedCells[0].ReCollapse();
                         this.state = State.Collapsing;
                     }
                     else
                     {
+                        Debug.Log("Resetting Cell");
                         collapsedCells[0].Reset();
                     }
                 }

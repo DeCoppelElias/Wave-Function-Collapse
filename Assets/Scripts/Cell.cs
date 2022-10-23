@@ -3,32 +3,8 @@ using System.Linq;
 using UnityEngine;
 using static WaveFunctionCollapse;
 
-public class Cell
+public class Cell : System.ICloneable
 {
-    public class OptionsWrapper
-    {
-        private Cell cell;
-        private WaveFunctionCollapse wfc;
-        private Options options;
-
-        public OptionsWrapper(WaveFunctionCollapse wfc, Cell cell, Options options)
-        {
-            this.cell = cell;
-            this.options = options;
-            this.wfc = wfc;
-        }
-
-        public Options GetOptions()
-        {
-            return (Options)this.options.Clone();
-        }
-
-        public void ChangeOptions(Options options)
-        {
-            this.options = options;
-            wfc.UpdateCellOptions(cell, options.GetCount());
-        }
-    }
     public class Options : System.ICloneable
     {
         private Dictionary<int, List<Quaternion>> options = new Dictionary<int, List<Quaternion>>();
@@ -207,13 +183,41 @@ public class Cell
     public Cell(WaveFunctionCollapse wfc, int row, int column)
     {
         this.wfc = wfc;
+        this.collapsed = false;
+        this.pick = -1;
+        this.row = row;
+        this.column = column;
 
-        this.options = new Options();
+        for (int i = 0; i < rules.GetLength(0); i++)
+        {
+            for (int j = 0; j < rules.GetLength(1); j++)
+            {
+                this.rules[i, j] = "";
+            }
+        }
+
+        Options newOptions = new Options();
         for (int i = 0; i < wfc.getTileCount(); i++)
         {
             List<Quaternion> rotations = wfc.getTileWrapper(i).GetRotations();
-            this.options.AddOption(i, rotations);
+            newOptions.AddOption(i, rotations);
         }
+
+        UpdateOptions(newOptions);
+    }
+
+    private Cell(WaveFunctionCollapse wfc, int row, int column, bool collapsed, Options options, Options optionsBeforeCollapse, Options wrongOptions, int pick, Quaternion rotation)
+    {
+        this.wfc = wfc;
+
+        Options newOptions = new Options();
+        for (int i = 0; i < wfc.getTileCount(); i++)
+        {
+            List<Quaternion> rotations = wfc.getTileWrapper(i).GetRotations();
+            newOptions.AddOption(i, rotations);
+        }
+
+        UpdateOptions(newOptions);
 
         this.collapsed = false;
         this.pick = -1;
@@ -239,7 +243,7 @@ public class Cell
 
     public string Collapse()
     {
-        if (collapsed) return "ERROR";
+        if (collapsed) throw new System.Exception("Tried to collapse collapsed cell");
 
         // Make sure when recollapsing that previous options are not repicked
         Options realOptions = (Options)this.options.Clone();
@@ -295,6 +299,22 @@ public class Cell
 
         return status;
     }
+
+    private void UpdateOptions(Options options)
+    {
+        try
+        {
+            wfc.RemoveCellFromTree(this);
+        }
+        catch(System.Exception e)
+        {
+            Debug.Log("Crashed on cell: ");
+            wfc.DebugCell(this);
+            throw e;
+        }
+        this.options = options;
+        wfc.AddCellToTree(this);
+    }
     public void Reset()
     {
         this.wrongOptions = new Options();
@@ -302,13 +322,13 @@ public class Cell
     }
     public string UnCollapse()
     {
-        if (!collapsed) return "ERROR";
+        if (!collapsed) throw new System.Exception("Tried to uncollapse cell that has not been collapsed"); ;
 
         this.pick = -1;
         this.collapsed = false;
         this.rotation = Quaternion.identity;
 
-        this.options = (Options)this.optionsBeforeCollapse.Clone();
+        UpdateOptions((Options)this.optionsBeforeCollapse.Clone());
         this.optionsBeforeCollapse = new Options();
 
         wfc.RemoveFromCollapsedCells(this);
@@ -722,12 +742,14 @@ public class Cell
 
     private void ResetOptions()
     {
-        this.options = new Options();
+        Options newOptions = new Options();
         for (int i = 0; i < wfc.getTileCount(); i++)
         {
             List<Quaternion> rotations = wfc.getTileWrapper(i).GetRotations();
-            this.options.AddOption(i, rotations);
+            newOptions.AddOption(i, rotations);
         }
+
+        UpdateOptions(newOptions);
     }
 
     private void UpdateOptionsRule(Side side, string[] rule)
@@ -753,7 +775,7 @@ public class Cell
             if (validRotations.Count > 0) newOptions.AddOption(option, validRotations);
         }
 
-        this.options = newOptions;
+        UpdateOptions(newOptions);
     }
     private void UpdateOptionsDirectNeighbors()
     {
@@ -777,11 +799,13 @@ public class Cell
             if (validRotations.Count > 0) newOptions.AddOption(option, validRotations);
         }
 
-        this.options = newOptions;
+        UpdateOptions(newOptions);
     }
     private void UpdateOptionsNeighborOptions(Side side, Options neighborOptions)
     {
         Options newOptions = new Options();
+
+        Options optionsCopy = (Options)this.options.Clone();
 
         // Check for every neighbor option which options can be placed next to these options
         // If an options cannot be placed next to all neighbor options then that option is no longer possible and will be removed
@@ -794,19 +818,19 @@ public class Cell
             {
                 string[] neighborSideMarkers = neighborTileWrapper.GetSide(wfc.ReverseSide(side), neighborRotation);
 
-                foreach (int option in this.options.GetOptions())
+                foreach (int option in optionsCopy.GetOptions())
                 {
                     List<Quaternion> validRotations = new List<Quaternion>();
                     TileWrapper tileWrapper = wfc.getTileWrapper(option);
 
-                    List<Quaternion> rotations = this.options.getRotations(option);
+                    List<Quaternion> rotations = optionsCopy.getRotations(option);
                     foreach(Quaternion rotation in rotations)
                     {
                         string[] sideMarkers = tileWrapper.GetSide(side, rotation);
                         if (CheckRule(sideMarkers, neighborSideMarkers))
                         {
                             validRotations.Add(rotation);
-                            this.options.RemoveOption(option, rotation);
+                            optionsCopy.RemoveOption(option, rotation);
                         }
                     }
 
@@ -817,7 +841,7 @@ public class Cell
                 }
             }
         }
-        this.options = newOptions;
+        UpdateOptions(newOptions);
     }
 
     private bool CheckRules(int option, Quaternion rotation)
@@ -920,5 +944,11 @@ public class Cell
         }
 
         return optionsString;
+    }
+
+    public object Clone()
+    {
+        Cell cloneCell = new Cell(this.wfc, this.row, this.column, this.collapsed, (Options)this.options.Clone(), (Options)this.optionsBeforeCollapse.Clone(), (Options)this.wrongOptions.Clone(), this.pick, this.rotation);
+        return cloneCell;
     }
 }
