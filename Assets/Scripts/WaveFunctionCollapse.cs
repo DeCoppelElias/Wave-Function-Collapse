@@ -472,9 +472,19 @@ public class WaveFunctionCollapse : MonoBehaviour
             {
                 tileWrapper.SetSides(new string[,] {
                     { "StartMountain","StartMountain","StartMountain" },
-                    { "Mountain","Mountain","Grass" },
+                    { "LongSideMountain","LongSideMountain","Grass" },
                     { "Grass","Grass","Grass" },
-                    { "Grass","Mountain","Mountain" } });
+                    { "Grass","LongSideMountain","LongSideMountain" } });
+
+                tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
+            }
+            else if (tile.name == "mountaintile4")
+            {
+                tileWrapper.SetSides(new string[,] {
+                    { "CornerSideMountain","CornerSideMountain","Grass" },
+                    { "Grass","Grass","Grass" },
+                    { "Grass","Grass","Grass" },
+                    { "Grass","CornerSideMountain","CornerSideMountain" } });
 
                 tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
@@ -491,6 +501,8 @@ public class WaveFunctionCollapse : MonoBehaviour
         markers.Add("Mountain", new string[] { "Mountain", "StartMountain" });
         markers.Add("StartMountain", new string[] { "Mountain" });
         markers.Add("WaterMountain", new string[] { "WaterMountain" });
+        markers.Add("CornerSideMountain", new string[] { "LongSideMountain" });
+        markers.Add("LongSideMountain", new string[] { "LongSideMountain", "CornerSideMountain" });
     }
     private void Initialize()
     {
@@ -563,29 +575,6 @@ public class WaveFunctionCollapse : MonoBehaviour
     private void Start()
     {
         Initialize();
-
-        TestTree();
-    }
-
-    private void TestTree()
-    {
-        CellNode testNode1 = new CellNode(0, 0, 5);
-        CellNode testNode2 = new CellNode(1, 0, 3);
-        CellNode testNode3 = new CellNode(2, 0, 5);
-        CellNode testNode4 = new CellNode(0, 1, 5);
-        CellNode testNode5 = new CellNode(1, 1, 3);
-        CellNode testNode6 = new CellNode(2, 1, 5);
-
-        AVL avl = new AVL();
-        avl.Add(testNode1);
-        avl.Add(testNode2);
-        avl.Add(testNode3);
-        avl.Add(testNode4);
-        avl.Add(testNode5);
-        avl.Add(testNode6);
-
-        avl.Delete(testNode3);
-        avl.PopMinValue();
     }
 
     private void Update()

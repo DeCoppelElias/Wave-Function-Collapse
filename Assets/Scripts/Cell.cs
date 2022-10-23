@@ -295,6 +295,8 @@ public class Cell : System.ICloneable
 
         wrongOptions.AddOption(lastPick, lastRotation);
 
+        wfc.RemoveCellFromTree(this);
+
         string status = Collapse();
 
         return status;
