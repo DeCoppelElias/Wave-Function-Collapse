@@ -121,6 +121,11 @@ public class WaveFunctionCollapse : MonoBehaviour
         return true;
     }
 
+    public bool GetDebug()
+    {
+        return this.debug;
+    }
+
     public void AddToCollapsedCells(Cell cell)
     {
         this.collapsedCells.Insert(0,cell);
@@ -292,9 +297,9 @@ public class WaveFunctionCollapse : MonoBehaviour
             {
                 tileWrapper.SetSides(new string[,] {
                     { "ShortGrass","ShortGrass","ShortGrass" },
-                    { "WaterGrass","Water","Water" },
+                    { "LongSideWaterGrass","Water","Water" },
                     { "Water","Water","Water" },
-                    { "Water","Water","WaterGrass" } });
+                    { "Water","Water","LongSideWaterGrass" } });
 
                 tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
@@ -322,8 +327,8 @@ public class WaveFunctionCollapse : MonoBehaviour
             {
                 tileWrapper.SetSides(new string[,] {
                     { "ShortGrass","ShortGrass","ShortGrass" },
-                    { "WaterGrass","Water","Water" },
-                    { "Water","Water","WaterGrass" },
+                    { "BigCornerSideWaterGrass","Water","Water" },
+                    { "Water","Water","BigCornerSideWaterGrass" },
                     { "ShortGrass","ShortGrass","ShortGrass" } });
 
                 tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
@@ -351,10 +356,10 @@ public class WaveFunctionCollapse : MonoBehaviour
             else if (tile.name == "rivertile8")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "WaterGrass","Water","Water" },
+                    { "SmallCornerSideWaterGrass","Water","Water" },
                     { "Water","Water","Water" },
                     { "Water","Water","Water" },
-                    { "Water","Water","WaterGrass" } });
+                    { "Water","Water","SmallCornerSideWaterGrass" } });
 
                 tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
@@ -442,9 +447,9 @@ public class WaveFunctionCollapse : MonoBehaviour
             {
                 tileWrapper.SetSides(new string[,] {
                     { "StartMountain","StartMountain","StartMountain" },
-                    { "WaterMountain","Water","Water" },
+                    { "LongSideWaterMountain","Water","Water" },
                     { "Water","Water","Water" },
-                    { "Water","Water","WaterMountain" } });
+                    { "Water","Water","LongSideWaterMountain" } });
 
                 tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
@@ -461,10 +466,10 @@ public class WaveFunctionCollapse : MonoBehaviour
             else if (tile.name == "mountaintile2")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "WaterMountain","Water","Water" },
+                    { "CornerSideWaterMountain","Water","Water" },
                     { "Water","Water","Water" },
                     { "Water","Water","Water" },
-                    { "Water","Water","WaterMountain" } });
+                    { "Water","Water","CornerSideWaterMountain" } });
 
                 tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
@@ -472,19 +477,19 @@ public class WaveFunctionCollapse : MonoBehaviour
             {
                 tileWrapper.SetSides(new string[,] {
                     { "StartMountain","StartMountain","StartMountain" },
-                    { "LongSideMountain","LongSideMountain","Grass" },
+                    { "LongSideGrassMountain","LongSideGrassMountain","Grass" },
                     { "Grass","Grass","Grass" },
-                    { "Grass","LongSideMountain","LongSideMountain" } });
+                    { "Grass","LongSideGrassMountain","LongSideGrassMountain" } });
 
                 tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
             else if (tile.name == "mountaintile4")
             {
                 tileWrapper.SetSides(new string[,] {
-                    { "CornerSideMountain","CornerSideMountain","Grass" },
+                    { "CornerSideGrassMountain","CornerSideGrassMountain","Grass" },
                     { "Grass","Grass","Grass" },
                     { "Grass","Grass","Grass" },
-                    { "Grass","CornerSideMountain","CornerSideMountain" } });
+                    { "Grass","CornerSideGrassMountain","CornerSideGrassMountain" } });
 
                 tileWrapper.SetRotations(new Quaternion[] { Quaternion.identity, Quaternion.Euler(0, 0, 90), Quaternion.Euler(0, 0, 180), Quaternion.Euler(0, 0, 270) }.ToList());
             }
@@ -495,14 +500,23 @@ public class WaveFunctionCollapse : MonoBehaviour
         markers = new Dictionary<string, string[]>();
 
         markers.Add("Water", new string[] { "Water" });
+
+
         markers.Add("ShortGrass", new string[] { "Grass" });
         markers.Add("Grass", new string[] { "ShortGrass" , "Grass"});
         markers.Add("WaterGrass", new string[] { "WaterGrass" });
+        markers.Add("SmallCornerSideWaterGrass", new string[] { "LongSideWaterGrass", "BigCornerSideWaterGrass" });
+        markers.Add("BigCornerSideWaterGrass", new string[] { "LongSideWaterGrass", "SmallCornerSideWaterGrass" });
+        markers.Add("LongSideWaterGrass", new string[] { "LongSideWaterGrass", "SmallCornerSideWaterGrass", "BigCornerSideWaterGrass" });
+
+
         markers.Add("Mountain", new string[] { "Mountain", "StartMountain" });
         markers.Add("StartMountain", new string[] { "Mountain" });
         markers.Add("WaterMountain", new string[] { "WaterMountain" });
-        markers.Add("CornerSideMountain", new string[] { "LongSideMountain" });
-        markers.Add("LongSideMountain", new string[] { "LongSideMountain", "CornerSideMountain" });
+        markers.Add("CornerSideWaterMountain", new string[] { "LongSideWaterMountain" });
+        markers.Add("LongSideWaterMountain", new string[] { "LongSideWaterMountain", "CornerSideWaterMountain" });
+        markers.Add("CornerSideGrassMountain", new string[] { "LongSideGrassMountain" });
+        markers.Add("LongSideGrassMountain", new string[] { "LongSideGrassMountain", "CornerSideGrassMountain" });
     }
     private void Initialize()
     {

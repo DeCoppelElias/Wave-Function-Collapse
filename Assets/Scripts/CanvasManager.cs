@@ -8,6 +8,7 @@ public class CanvasManager : MonoBehaviour
     private TMP_InputField widthInput;
     private TMP_InputField heightInput;
     private TMP_InputField speedInput;
+    private GameObject cellInfoPanel;
 
     private TMP_Text cellOptionsOuput;
 
@@ -23,11 +24,13 @@ public class CanvasManager : MonoBehaviour
         speedInput = GameObject.Find("SpeedInput").GetComponent<TMP_InputField>();
 
         cellOptionsOuput = GameObject.Find("OptionsOutput").GetComponent<TMP_Text>();
+        cellInfoPanel = GameObject.Find("CellInfoPanel");
+        cellInfoPanel.SetActive(false);
     }
 
     private void Update()
     {
-        if (Input.GetMouseButtonDown(0))
+        if (wfc.GetDebug() && Input.GetMouseButtonDown(0))
         {
             Vector3 mousePos = Input.mousePosition;
             Vector3 worldpos = Camera.main.ScreenToWorldPoint(mousePos);
@@ -38,10 +41,14 @@ public class CanvasManager : MonoBehaviour
                 Cell cell = wfc.GetCell(worldpos);
                 string optionsString = cell.GetDisplayOptionsString();
                 cellOptionsOuput.text = optionsString;
+
+                cellInfoPanel.SetActive(true);
             }
             else
             {
                 cellOptionsOuput.text = "";
+
+                cellInfoPanel.SetActive(false);
             }
         }
     }
